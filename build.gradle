@@ -1,0 +1,45 @@
+apply plugin: "java"
+
+version "1.0"
+
+sourceCompatibility = JavaVersion.VERSION_16
+
+compileJava.options.encoding = "UTF-8"
+compileTestJava.options.encoding = "UTF-8"
+
+repositories {
+    mavenCentral()
+    maven { url "https://raw.githubusercontent.com/Zelaux/MindustryRepo/master/repository" }
+    maven { url "https://www.jitpack.io" }
+}
+
+ext {
+    mindustryVersion = "v145"
+    lombokVersion = "1.18.28"
+    jdaVersion = "5.0.0-beta.13"
+    jacksonYamlVersion = "2.14.2"
+}
+
+
+dependencies {
+    annotationProcessor "org.projectlombok:lombok:$lombokVersion"
+    compileOnly "org.projectlombok:lombok:$lombokVersion"
+
+    implementation "com.github.Anuken.Arc:arc-core:$mindustryVersion"
+    implementation ("com.github.Anuken.Mindustry:core:$mindustryVersion") { exclude group: "com.github.Anuken.Arc" }
+
+    implementation ("net.dv8tion:JDA:$jdaVersion") { exclude module: "opus-java" }
+    implementation "com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:$jacksonYamlVersion"
+}
+
+jar {
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
+    manifest {
+        attributes "Main-Class": "stellar.corebot.CoreBot"
+    }
+
+    archiveFileName = "${project.archivesBaseName}.jar"
+    from {
+        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+}

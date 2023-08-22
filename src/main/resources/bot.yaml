@@ -1,0 +1,10 @@
+botToken: "TOKEN"
+
+mapsChannel: 021345
+schematicsChannel: 012345
+suggestionsChannel: 012345
+botChannel: 012345
+
+statusChannel: 012345
+statusMessage: 012345
+statusUpdatePeriod: 60

@@ -5,8 +5,12 @@ import arc.util.Log;
 import arc.util.Strings;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
+import net.dv8tion.jda.api.requests.GatewayIntent;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 
 public class CoreBot {
     public static void main(String[] args) {
@@ -19,6 +23,8 @@ public class CoreBot {
 
         Config.load();
         JDA jda = JDABuilder.createDefault(Variables.config.getBotToken())
+                .addEventListeners(new Listener())
+                .enableIntents(GatewayIntent.MESSAGE_CONTENT)
                 .build();
     }
 }

@@ -84,7 +84,44 @@ public class CoreBot {
                     return null;
                 });
             } else {
-                // TODO: implement
+                future.thenComposeAsync(ignored ->
+                        DatabaseAsync.getPlayerAsync(id.getAsInt())
+                ).thenComposeAsync(player -> {
+                    if (player == null) {
+                        return CompletableFuture.supplyAsync(() -> new String[] {});
+                    } else {
+                        return DatabaseAsync.getContextAsync().thenApplyAsync(context ->
+                                context.selectFrom(Tables.playtime)
+                                        .where(Tables.playtime.uuid.eq(player.getUuid()))
+                                        .fetchOne()
+                        ).thenApplyAsync(playtime -> {
+                            StringBuilder builder = new StringBuilder();
+                            Arrays.stream(Tables.playtime.fields())
+                                    .filter(field -> field.getType() == Long.class)
+                                    .forEach(field -> builder.append(field.getName())
+                                            .append(": ")
+                                            .append(longToTime((long) field.get(playtime)))
+                                            .append("\n")
+                                    );
+                            return new String[] {Strings.stripColors(player.getName()), builder.toString()};
+                        });
+                    }
+                }).thenComposeAsync(response -> {
+                    EmbedBuilder embedBuilder = new EmbedBuilder();
+                    if (response.length == 0) {
+                        embedBuilder.setTitle("Player not found")
+                                .setColor(Colors.red);
+                    } else {
+                        embedBuilder.setTitle("Playtime for " + response[0])
+                                .setDescription(response[1])
+                                .setColor(Colors.blue);
+                    }
+
+                    return interaction.getHook().sendMessageEmbeds(embedBuilder.build()).submit();
+                }).exceptionally(throwable -> {
+                    Log.err(throwable);
+                    return null;
+                });
             }
 
         }, new OptionData(OptionType.INTEGER, "id", "The ID of the player"));

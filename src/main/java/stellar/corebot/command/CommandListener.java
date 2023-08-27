@@ -6,8 +6,7 @@ import net.dv8tion.jda.api.interactions.commands.build.Commands;
 import net.dv8tion.jda.api.interactions.commands.build.OptionData;
 import net.dv8tion.jda.api.interactions.commands.build.SlashCommandData;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.*;
 
 import static stellar.corebot.Variables.jda;
 
@@ -16,19 +15,27 @@ import static stellar.corebot.Variables.jda;
  */
 @SuppressWarnings({"unused", "UnusedReturnValue"})
 public class CommandListener {
-    private final Map<String, Command> commands = new LinkedHashMap<>();
+    private final HashMap<String, Command> commands = new LinkedHashMap<>();
+    private final Set<SlashCommandData> queuedCommands = new HashSet<>();
 
     public Command register(SlashCommandData data, CommandRunner runner) {
-        jda.updateCommands().addCommands(data).queue();
+        queuedCommands.add(data);
         commands.put(data.getName(), new Command(data, runner));
         return commands.get(data.getName());
     }
 
     public Command register(String name, String description, CommandRunner runner, OptionData... options) {
         SlashCommandData data = Commands.slash(name, description).addOptions(options);
-        jda.updateCommands().addCommands(data).queue();
+        queuedCommands.add(data);
         commands.put(name, new Command(data, runner));
         return commands.get(name);
+    }
+
+    /**
+     * Sends all commands to the Discord server
+     */
+    public void update() {
+        jda.updateCommands().addCommands(queuedCommands).submit().thenRun(queuedCommands::clear);
     }
 
     public ResponseType handle(SlashCommandInteraction interaction) {
@@ -40,6 +47,11 @@ public class CommandListener {
 
         command.run(interaction);
         return ResponseType.valid;
+    }
+
+    @SuppressWarnings("unchecked")
+    public Map<String, Command> getCommands() {
+        return (Map<String, Command>) commands.clone();
     }
 
     public enum ResponseType {

@@ -5,6 +5,7 @@ import arc.util.Log;
 import arc.util.Strings;
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.JDABuilder;
+import net.dv8tion.jda.api.interactions.commands.Command;
 import net.dv8tion.jda.api.interactions.commands.OptionMapping;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.interactions.commands.build.OptionData;
@@ -18,6 +19,7 @@ import stellar.database.gen.Tables;
 import java.text.MessageFormat;
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 
@@ -164,6 +166,42 @@ public class CoreBot {
             });
 
         }, new OptionData(OptionType.INTEGER, "id", "Айди игрока", true));
+
+        commandListener.register("help", "Справка по командам", interaction -> {
+            interaction.deferReply().submit().thenCombineAsync(jda.retrieveCommands().submit(), (hook, commands) -> {
+                OptionMapping cmd = interaction.getOption("command");
+                if (cmd == null) {
+                    StringBuilder builder = new StringBuilder();
+                    EmbedBuilder embedBuilder = new EmbedBuilder()
+                            .setTitle("Команды")
+                            .setColor(Colors.yellow);
+                    commands.forEach(command -> {
+                        List<Command.Option> options = command.getOptions();
+                        builder.append("</").append(command.getName()).append(":").append(command.getId()).append(">")
+                                .append(" - ")
+                                .append(command.getDescription())
+                                .append("\n");
+                        for (int i = 0; i < options.size(); i++) {
+                            Command.Option data = options.get(i);
+                            builder.append("└ ")
+                                    .append("`").append(data.getName()).append("`")
+                                    .append(": ").append(data.getDescription())
+                                    .append("\n");
+                        }
+                        builder.append("\n");
+                    });
+                    embedBuilder.setDescription(builder);
+                    return hook.sendMessageEmbeds(embedBuilder.build()).submit();
+                } else {
+                    return hook.sendMessage("Not yet implemented...").submit();
+                    // TODO: implement
+                }
+            });
+        }, new OptionData(OptionType.STRING, "command", "Команда"));
+
+        commandListener.register("testcmd", "asdasd", i -> {}, new OptionData(OptionType.INTEGER, "p1", "param1"), new OptionData(OptionType.ROLE, "p2", "param2"));
+
+        commandListener.update();
     }
 
     public static String longToTime(long seconds) {

@@ -3,14 +3,18 @@ package stellar.corebot;
 import arc.util.ColorCodes;
 import arc.util.Log;
 import arc.util.Strings;
-import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
+import net.dv8tion.jda.api.interactions.commands.OptionMapping;
+import net.dv8tion.jda.api.interactions.commands.OptionType;
+import net.dv8tion.jda.api.interactions.commands.build.Commands;
+import net.dv8tion.jda.api.interactions.commands.build.OptionData;
 import net.dv8tion.jda.api.requests.GatewayIntent;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
+import java.util.Objects;
+
+import static stellar.corebot.Variables.jda;
+import static stellar.corebot.Variables.commandListener;
 
 public class CoreBot {
     public static void main(String[] args) {
@@ -22,9 +26,13 @@ public class CoreBot {
         };
 
         Config.load();
-        JDA jda = JDABuilder.createDefault(Variables.config.getBotToken())
+        jda = JDABuilder.createDefault(Variables.config.getBotToken())
                 .addEventListeners(new Listener())
                 .enableIntents(GatewayIntent.MESSAGE_CONTENT)
                 .build();
+        commandListener.register("test", "Test command", interaction -> {
+            Log.info("test @ by @", interaction.getOption("test").getAsString(), interaction.getUser().getEffectiveName());
+            interaction.reply("Hello").queue();
+        }, new OptionData(OptionType.STRING, "test", "Test Parameter", true));
     }
 }

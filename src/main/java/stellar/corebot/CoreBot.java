@@ -40,12 +40,7 @@ public class CoreBot {
                 .enableIntents(GatewayIntent.MESSAGE_CONTENT)
                 .build();
 
-        commandListener.register("test", "Test command", interaction -> {
-            Log.info("test @ by @", Objects.requireNonNull(interaction.getOption("test")).getAsString(), interaction.getUser().getEffectiveName());
-            interaction.reply("Hello").queue();
-        }, new OptionData(OptionType.STRING, "test", "Test Parameter", true));
-
-        commandListener.register("playtime", "Playtime of top 10 players or the one with the specified ID", interaction -> {
+        commandListener.register("playtime", "Время игры указанного или 10 лучших игроков", interaction -> {
             CompletableFuture<?> future = interaction.deferReply().submit();
             OptionMapping id = interaction.getOption("id");
             if (id == null) {
@@ -67,7 +62,7 @@ public class CoreBot {
                             .fetchArray();
 
                     EmbedBuilder embedBuilder = new EmbedBuilder()
-                            .setTitle("Top playtime")
+                            .setTitle("Топ времени игры")
                             .setColor(Colors.blue);
 
                     for (int i = 0; i < fetch.length; i++) {
@@ -109,10 +104,10 @@ public class CoreBot {
                 }).thenComposeAsync(response -> {
                     EmbedBuilder embedBuilder = new EmbedBuilder();
                     if (response.length == 0) {
-                        embedBuilder.setTitle("Player not found")
+                        embedBuilder.setTitle("Игрок не найден")
                                 .setColor(Colors.red);
                     } else {
-                        embedBuilder.setTitle("Playtime for " + response[0])
+                        embedBuilder.setTitle("Время игры для " + response[0])
                                 .setDescription(response[1])
                                 .setColor(Colors.blue);
                     }
@@ -124,7 +119,7 @@ public class CoreBot {
                 });
             }
 
-        }, new OptionData(OptionType.INTEGER, "id", "The ID of the player"));
+        }, new OptionData(OptionType.INTEGER, "id", "Айди игрока"));
     }
 
     public static String longToTime(long seconds) {

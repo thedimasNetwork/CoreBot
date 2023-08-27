@@ -120,6 +120,50 @@ public class CoreBot {
             }
 
         }, new OptionData(OptionType.INTEGER, "id", "Айди игрока"));
+
+        commandListener.register("stats", "Статистика игры для указанного игрока", interaction -> {
+            interaction.deferReply().submit().thenComposeAsync(ignored ->
+                    DatabaseAsync.getPlayerAsync(Objects.requireNonNull(interaction.getOption("id")).getAsInt())
+            ).thenComposeAsync(player -> {
+                if (player == null) {
+                    return CompletableFuture.supplyAsync(() -> new String[] {});
+                } else {
+                    return DatabaseAsync.getStatsAsync(
+                            player.getUuid()
+                    ).thenApplyAsync(stats -> {
+                        String statsMessage = MessageFormat.format(Const.statsFormat,
+                                stats.getBuilt(), stats.getBroken(),
+                                stats.getAttacks(), stats.getSurvivals(), stats.getWaves(),
+                                stats.getLogins(), stats.getMessages(), stats.getDeaths());
+                        String hexesMessage = MessageFormat.format(Const.hexStatsFormat,
+                                stats.getHexesCaptured(), stats.getHexesLost(), stats.getHexesDestroyed(),
+                                stats.getHexWins(), stats.getHexLosses());
+                        return new String[] {Strings.stripColors(player.getName()), statsMessage, hexesMessage};
+                    });
+                }
+            }).thenComposeAsync(response -> {
+                if (response.length == 0) {
+                    EmbedBuilder embedBuilder = new EmbedBuilder();
+                    embedBuilder.setTitle("Игрок не найден")
+                            .setColor(Colors.red);
+                    return interaction.getHook().sendMessageEmbeds(embedBuilder.build()).submit();
+                } else {
+                    EmbedBuilder gameStats = new EmbedBuilder(), hexStats = new EmbedBuilder();
+                    gameStats.setTitle("Статистика игры " + response[0])
+                            .setDescription(response[1])
+                            .setColor(Colors.blue);
+                    hexStats.setTitle("Статистика хексов")
+                            .setDescription(response[2])
+                            .setColor(Colors.blue);
+                    return interaction.getHook().sendMessageEmbeds(gameStats.build(), hexStats.build()).submit();
+                }
+
+            }).exceptionally(throwable -> {
+                Log.err(throwable);
+                return null;
+            });
+
+        }, new OptionData(OptionType.INTEGER, "id", "Айди игрока", true));
     }
 
     public static String longToTime(long seconds) {

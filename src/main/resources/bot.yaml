@@ -8,3 +8,10 @@ botChannel: 012345
 statusChannel: 012345
 statusMessage: 012345
 statusUpdatePeriod: 60
+
+database:
+  ip: "127.0.0.1"
+  port: 3306
+  name: "DB_NAME"
+  user: "DB_USER"
+  password: "DB_PASSWORD"

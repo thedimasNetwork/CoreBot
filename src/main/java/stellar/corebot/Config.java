@@ -6,6 +6,7 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import stellar.database.Database;
 
 import java.io.File;
 import java.io.IOException;
@@ -29,6 +30,8 @@ public class Config {
     private long statusMessage;
     private int statusUpdatePeriod;
 
+    private Database database;
+
 
     public static void load() {
         ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
@@ -51,5 +54,16 @@ public class Config {
         } catch (IOException e) {
             Log.err(e);
         }
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class Database {
+        private String ip;
+        private int port;
+        private String name;
+        private String user;
+        private String password;
     }
 }

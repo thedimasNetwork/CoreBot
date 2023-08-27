@@ -18,6 +18,8 @@ ext {
     lombokVersion = "1.18.28"
     jdaVersion = "5.0.0-beta.13"
     jacksonYamlVersion = "2.14.2"
+    jooqVersion = "3.17.0"
+    databaseVersion = "ee150bbb7e"
 }
 
 
@@ -30,6 +32,9 @@ dependencies {
 
     implementation ("net.dv8tion:JDA:$jdaVersion") { exclude module: "opus-java" }
     implementation "com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:$jacksonYamlVersion"
+
+    implementation "org.jooq:jooq:$jooqVersion"
+    implementation "com.github.thedimasNetwork:DatabaseWrapper:$databaseVersion"
 }
 
 jar {

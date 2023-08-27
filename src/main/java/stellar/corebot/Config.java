@@ -1,6 +1,5 @@
 package stellar.corebot;
 
-import arc.files.Fi;
 import arc.util.Log;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
@@ -35,12 +34,12 @@ public class Config {
         ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
         mapper.findAndRegisterModules();
 
-        if (!new Fi(Const.homeFolder).exists()) {
-            new Fi(Const.homeFolder).mkdirs();
+        if (!new File(Const.homeFolder).exists()) {
+            new File(Const.homeFolder).mkdirs();
             // copy important resources if necessary
         }
 
-        if (!new Fi(Const.homeFolder + "bot.yaml").exists()) {
+        if (!new File(Const.homeFolder + "bot.yaml").exists()) {
             try (InputStream is = Config.class.getClassLoader().getResourceAsStream("bot.yaml")) {
                 Files.copy(Objects.requireNonNull(is), Path.of(Const.homeFolder + "bot.yaml"));
             } catch (IOException e) {

@@ -3,6 +3,7 @@ package stellar.corebot;
 import arc.util.ColorCodes;
 import arc.util.Log;
 import arc.util.Strings;
+import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.interactions.commands.OptionMapping;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
@@ -65,13 +66,19 @@ public class CoreBot {
                             .limit(10)
                             .fetchArray();
 
-                    for (Record3<Integer, String, ?> record : fetch) {
-                        builder.append("`").append(record.value1()).append("` ")
-                                .append(record.value2()).append(" - ")
-                                .append(longToTime((long) record.value3())).append("\n");
+                    EmbedBuilder embedBuilder = new EmbedBuilder()
+                            .setTitle("Top playtime")
+                            .setColor(Colors.blue);
+
+                    for (int i = 0; i < fetch.length; i++) {
+                        builder.append(i).append(". ")
+                                .append(Strings.stripColors(fetch[i].value2()))
+                                .append(" - ")
+                                .append(longToTime((long) fetch[i].value3())).append("\n");
                     }
 
-                    return interaction.getHook().sendMessage(builder.toString().strip()).submit();
+                    embedBuilder.setDescription(builder);
+                    return interaction.getHook().sendMessageEmbeds(embedBuilder.build()).submit();
                 }).exceptionally(throwable -> {
                     Log.err(throwable);
                     return null;

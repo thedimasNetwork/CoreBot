@@ -4,9 +4,7 @@ import arc.util.ColorCodes;
 import arc.util.Log;
 import arc.util.Strings;
 import net.dv8tion.jda.api.JDABuilder;
-import net.dv8tion.jda.api.interactions.commands.OptionMapping;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
-import net.dv8tion.jda.api.interactions.commands.build.Commands;
 import net.dv8tion.jda.api.interactions.commands.build.OptionData;
 import net.dv8tion.jda.api.requests.GatewayIntent;
 
@@ -31,7 +29,7 @@ public class CoreBot {
                 .enableIntents(GatewayIntent.MESSAGE_CONTENT)
                 .build();
         commandListener.register("test", "Test command", interaction -> {
-            Log.info("test @ by @", interaction.getOption("test").getAsString(), interaction.getUser().getEffectiveName());
+            Log.info("test @ by @", Objects.requireNonNull(interaction.getOption("test")).getAsString(), interaction.getUser().getEffectiveName());
             interaction.reply("Hello").queue();
         }, new OptionData(OptionType.STRING, "test", "Test Parameter", true));
     }

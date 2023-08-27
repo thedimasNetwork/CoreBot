@@ -13,6 +13,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Objects;
 
 @Data
 @NoArgsConstructor
@@ -41,7 +42,7 @@ public class Config {
 
         if (!new Fi(Const.homeFolder + "bot.yaml").exists()) {
             try (InputStream is = Config.class.getClassLoader().getResourceAsStream("bot.yaml")) {
-                Files.copy(is, Path.of(Const.homeFolder + "bot.yaml"));
+                Files.copy(Objects.requireNonNull(is), Path.of(Const.homeFolder + "bot.yaml"));
             } catch (IOException e) {
                 Log.err(e);
             }

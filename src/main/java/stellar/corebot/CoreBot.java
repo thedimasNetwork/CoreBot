@@ -3,8 +3,12 @@ package stellar.corebot;
 import arc.util.ColorCodes;
 import arc.util.Log;
 import arc.util.Strings;
+import arc.util.Time;
+import mindustry.net.Host;
+import mindustry.net.NetworkIO;
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.JDABuilder;
+import net.dv8tion.jda.api.entities.MessageEmbed;
 import net.dv8tion.jda.api.interactions.commands.Command;
 import net.dv8tion.jda.api.interactions.commands.OptionMapping;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
@@ -16,14 +20,20 @@ import org.jooq.impl.DSL;
 import stellar.database.DatabaseAsync;
 import stellar.database.gen.Tables;
 
+import java.io.IOException;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
+import java.nio.ByteBuffer;
 import java.text.MessageFormat;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.stream.Stream;
+import java.util.stream.Collectors;
 
 import static stellar.corebot.Variables.*;
 
@@ -218,7 +228,8 @@ public class CoreBot {
                     for (Command.Option data : options) {
                         builder.append("└ ")
                                 .append("`").append(data.getName()).append("`")
-                                .append(": ").append(data.getDescription())
+                                .append(": ")
+                                .append(data.getDescription())
                                 .append("\n");
                     }
 
@@ -227,6 +238,43 @@ public class CoreBot {
                 }
             });
         }, new OptionData(OptionType.STRING, "command", "Команда"));
+
+        commandListener.register("status", "Получить статус указанного или всех серверов", interaction -> {
+            interaction.deferReply().submit().thenComposeAsync(hook -> {
+                OptionMapping server = interaction.getOption("server");
+                if (server == null) {
+                    EmbedBuilder embedBuilder = new EmbedBuilder()
+                            .setTitle("Статус серверов")
+                            .setColor(Colors.blue)
+                            .setTimestamp(Instant.now());
+
+                    Const.servers.forEach((name, address) -> {
+                        String[] split = address.split(":");
+                        String title = String.format("**%s** | *%s*", name, address);
+                        String text;
+
+                        try {
+                            Host host = pingHost(split[0], Integer.parseInt(split[1]));
+                            text = "**Онлайн 🟢**\n" +
+                                    "Карта: **" + host.mapname + "**\n" +
+                                    "Игроков: **" + host.players + "**\n";
+                        } catch (IOException e) {
+                            text = "Оффлайн 🔴\n";
+                        }
+                        embedBuilder.addField(title, text, false);
+                    });
+
+                    return hook.sendMessageEmbeds(embedBuilder.build()).submit();
+                } else {
+                    return hook.sendMessage(String.format("Server chosen: **%s**. Not implemented", server.getAsString())).submit();
+                }
+            });
+        }, new OptionData(OptionType.STRING, "server", "Сервер").addChoices(
+               Const.servers.keySet()
+                        .stream()
+                        .map(s -> new Command.Choice(convertToTitleCase(s), s))
+                        .collect(Collectors.toList())
+        ));
 
         commandListener.update();
     }
@@ -239,5 +287,39 @@ public class CoreBot {
         } else { // More or equal to a day
             return MessageFormat.format(Const.dayFormat, seconds / (60 * 60 * 24), (seconds % (60 * 60 * 24)) / (60 * 60), (seconds % (60 * 60)) / 60);
         }
+    }
+
+    public static String convertToTitleCase(String input) {
+        StringBuilder result = new StringBuilder();
+        boolean capitalizeNext = true;
+
+        for (char c : input.toCharArray()) {
+            if (c == '_' || c == '-') {
+                result.append(' '); // Add space
+                capitalizeNext = true;
+            } else if (capitalizeNext) {
+                result.append(Character.toUpperCase(c));
+                capitalizeNext = false;
+            } else {
+                result.append(Character.toLowerCase(c));
+            }
+        }
+
+        return result.toString();
+    }
+
+    public static Host pingHost(String address, int port) throws IOException {
+        DatagramSocket socket = new DatagramSocket();
+        long time = Time.millis();
+        socket.send(new DatagramPacket(new byte[] {-2, 1}, 2, InetAddress.getByName(address), port));
+        socket.setSoTimeout(2000);
+
+        DatagramPacket packet = new DatagramPacket(new byte[512], 512);
+        socket.receive(packet);
+        socket.close();
+
+        ByteBuffer buffer = ByteBuffer.wrap(packet.getData());
+
+        return NetworkIO.readServerData((int) Time.timeSinceMillis(time), packet.getAddress().getHostAddress(), buffer);
     }
 }

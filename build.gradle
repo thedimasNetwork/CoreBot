@@ -28,7 +28,12 @@ dependencies {
     compileOnly "org.projectlombok:lombok:$lombokVersion"
 
     implementation "com.github.Anuken.Arc:arc-core:$mindustryVersion"
-    implementation ("com.github.Anuken.Mindustry:core:$mindustryVersion") { exclude group: "com.github.Anuken.Arc" }
+    implementation ("com.github.Anuken.Mindustry:core:$mindustryVersion") {
+        exclude module: "flabel"
+        exclude module: "freetype"
+        exclude module: "g3d"
+        exclude module: "fx"
+    }
 
     implementation ("net.dv8tion:JDA:$jdaVersion") { exclude module: "opus-java" }
     implementation "com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:$jacksonYamlVersion"

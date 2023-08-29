@@ -266,7 +266,35 @@ public class CoreBot {
 
                     return hook.sendMessageEmbeds(embedBuilder.build()).submit();
                 } else {
-                    return hook.sendMessage(String.format("Server chosen: **%s**. Not implemented", server.getAsString())).submit();
+                    String name = convertToTitleCase(server.getAsString());
+                    String address = Const.servers.get(server.getAsString());
+                    if (address == null) {
+                        EmbedBuilder embedBuilder = new EmbedBuilder()
+                                .setTitle("Сервер " + name + " не найден")
+                                .setColor(Colors.red);
+                        return hook.sendMessageEmbeds(embedBuilder.build()).submit();
+                    }
+
+                    EmbedBuilder embedBuilder = new EmbedBuilder()
+                            .setTitle("Статус сервера " + name)
+                            .setColor(Colors.blue)
+                            .setTimestamp(Instant.now());
+
+                    String[] split = address.split(":");
+                    String title = String.format("**%s** | *%s*", name, address);
+                    String text;
+
+                    try {
+                        Host host = pingHost(split[0], Integer.parseInt(split[1]));
+                        text = "**Онлайн 🟢**\n" +
+                                "Карта: **" + host.mapname + "**\n" +
+                                "Игроков: **" + host.players + "**\n";
+                    } catch (IOException e) {
+                        text = "Оффлайн 🔴\n";
+                    }
+
+                    embedBuilder.addField(title, text, false);
+                    return hook.sendMessageEmbeds(embedBuilder.build()).submit();
                 }
             });
         }, new OptionData(OptionType.STRING, "server", "Сервер").addChoices(

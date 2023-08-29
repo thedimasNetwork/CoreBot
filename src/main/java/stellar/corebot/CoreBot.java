@@ -4,23 +4,31 @@ import arc.util.ColorCodes;
 import arc.util.Log;
 import arc.util.Strings;
 import arc.util.Time;
+import mindustry.content.Blocks;
 import mindustry.net.Host;
 import mindustry.net.NetworkIO;
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.JDABuilder;
+import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.entities.MessageEmbed;
+import net.dv8tion.jda.api.entities.User;
+import net.dv8tion.jda.api.entities.emoji.Emoji;
 import net.dv8tion.jda.api.interactions.commands.Command;
 import net.dv8tion.jda.api.interactions.commands.OptionMapping;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.interactions.commands.build.OptionData;
 import net.dv8tion.jda.api.requests.GatewayIntent;
+import net.dv8tion.jda.api.utils.FileUpload;
 import org.jooq.Field;
 import org.jooq.Record3;
 import org.jooq.impl.DSL;
 import stellar.database.DatabaseAsync;
 import stellar.database.gen.Tables;
 
+import javax.imageio.ImageIO;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
@@ -48,6 +56,7 @@ public class CoreBot {
 
         Config.load();
         DatabaseAsync.load(config.getDatabase().getIp(), config.getDatabase().getPort(), config.getDatabase().getName(), config.getDatabase().getUser(), config.getDatabase().getPassword());
+        ContentHandler.load();
 
         jda = JDABuilder.createDefault(Variables.config.getBotToken())
                 .addEventListeners(new Listener())
@@ -77,7 +86,8 @@ public class CoreBot {
 
                     EmbedBuilder embedBuilder = new EmbedBuilder()
                             .setTitle("Топ времени игры")
-                            .setColor(Colors.blue);
+                            .setColor(Colors.blue)
+                            .setTimestamp(Instant.now());
 
                     for (int i = 0; i < fetch.length; i++) {
                         builder.append(i).append(". ")
@@ -162,13 +172,18 @@ public class CoreBot {
                             .setColor(Colors.red);
                     return interaction.getHook().sendMessageEmbeds(embedBuilder.build()).submit();
                 } else {
-                    EmbedBuilder gameStats = new EmbedBuilder(), hexStats = new EmbedBuilder();
+                    EmbedBuilder gameStats = new EmbedBuilder(),
+                            hexStats = new EmbedBuilder();
                     gameStats.setTitle("Статистика игры " + response[0])
                             .setDescription(response[1])
-                            .setColor(Colors.blue);
+                            .setColor(Colors.blue)
+                            .setTimestamp(Instant.now());
+
                     hexStats.setTitle("Статистика хексов")
                             .setDescription(response[2])
-                            .setColor(Colors.blue);
+                            .setColor(Colors.blue)
+                            .setTimestamp(Instant.now());
+
                     return interaction.getHook().sendMessageEmbeds(gameStats.build(), hexStats.build()).submit();
                 }
 
@@ -278,6 +293,48 @@ public class CoreBot {
                         .map(s -> new Command.Choice(convertToTitleCase(s), s))
                         .collect(Collectors.toList())
         ));
+
+        commandListener.register("map", "Загрузить карту в канал", interaction -> {
+            interaction.deferReply().submit().thenComposeAsync(hook -> {
+                try {
+                    Message.Attachment attachment = interaction.getOption("map").getAsAttachment();
+                    ContentHandler.Map map = ContentHandler.readMap(ContentHandler.download(attachment.getUrl()));
+                    ByteArrayOutputStream previewStream = new ByteArrayOutputStream();
+                    ImageIO.write(map.image, "png", previewStream);
+
+                    User author = interaction.getUser();
+                    EmbedBuilder embedBuilder = new EmbedBuilder()
+                            .setColor(Colors.purple)
+                            .setImage("attachment://preview.png")
+                            .setAuthor(author.getName(), author.getAvatarUrl(), author.getAvatarUrl())
+                            .setTitle(map.name == null ? attachment.getFileName().replace(".msav", "") : map.name)
+                            .setFooter(map.description)
+                            .setTimestamp(Instant.now());
+
+                    return jda.getTextChannelById(config.getMapsChannel())
+                            .sendMessageEmbeds(embedBuilder.build())
+                            .addFiles(FileUpload.fromData(ContentHandler.download(attachment.getUrl()), attachment.getFileName()))
+                            .addFiles(FileUpload.fromData(previewStream.toByteArray(), "preview.png"))
+                            .submit()
+                            .thenComposeAsync(message -> {
+                                message.addReaction(Emoji.fromUnicode("👍")).queue();
+                                message.addReaction(Emoji.fromUnicode("👎")).queue();
+                                EmbedBuilder successBuilder = new EmbedBuilder()
+                                        .setTitle("Карта отправлена")
+                                        .setColor(Colors.green);
+                                return hook.sendMessageEmbeds(successBuilder.build()).submit();
+                            });
+                } catch (Throwable t) {
+                    Log.err(t);
+                    EmbedBuilder embedBuilder = new EmbedBuilder()
+                            .setTitle("Не удалось отправить/обработать карту")
+                            .setDescription(t.toString())
+                            .setColor(Colors.red);
+
+                    return hook.sendMessageEmbeds(embedBuilder.build()).submit();
+                }
+            });
+        }, new OptionData(OptionType.ATTACHMENT, "map", "Карта", true));
 
         commandListener.update();
     }

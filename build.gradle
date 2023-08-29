@@ -31,7 +31,6 @@ dependencies {
     implementation ("com.github.Anuken.Mindustry:core:$mindustryVersion") {
         exclude module: "flabel"
         exclude module: "freetype"
-        exclude module: "g3d"
         exclude module: "fx"
     }
 

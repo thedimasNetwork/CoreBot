@@ -21,7 +21,9 @@ import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Stream;
 
 import static stellar.corebot.Variables.*;
 
@@ -173,7 +175,7 @@ public class CoreBot {
                 if (cmd == null) {
                     StringBuilder builder = new StringBuilder();
                     EmbedBuilder embedBuilder = new EmbedBuilder()
-                            .setTitle("Команды")
+                            .setTitle("Справка по командам")
                             .setColor(Colors.yellow);
                     commands.forEach(command -> {
                         List<Command.Option> options = command.getOptions();
@@ -181,8 +183,7 @@ public class CoreBot {
                                 .append(" - ")
                                 .append(command.getDescription())
                                 .append("\n");
-                        for (int i = 0; i < options.size(); i++) {
-                            Command.Option data = options.get(i);
+                        for (Command.Option data : options) {
                             builder.append("└ ")
                                     .append("`").append(data.getName()).append("`")
                                     .append(": ").append(data.getDescription())
@@ -193,13 +194,39 @@ public class CoreBot {
                     embedBuilder.setDescription(builder);
                     return hook.sendMessageEmbeds(embedBuilder.build()).submit();
                 } else {
-                    return hook.sendMessage("Not yet implemented...").submit();
-                    // TODO: implement
+                    Optional<Command> command = commands.stream()
+                            .filter(c -> c.getName().equals(cmd.getAsString()))
+                            .findFirst();
+
+                    if (command.isEmpty()) {
+                        EmbedBuilder embedBuilder = new EmbedBuilder()
+                                .setTitle("Команда " + cmd.getAsString() + " не найдена")
+                                .setColor(Colors.red);
+                        return hook.sendMessageEmbeds(embedBuilder.build()).submit();
+                    }
+
+                    StringBuilder builder = new StringBuilder();
+                    EmbedBuilder embedBuilder = new EmbedBuilder()
+                            .setTitle("Справка по команде " + cmd.getAsString())
+                            .setColor(Colors.yellow);
+
+                    List<Command.Option> options = command.get().getOptions();
+                    builder.append("</").append(command.get().getName()).append(":").append(command.get().getId()).append(">")
+                            .append(" - ")
+                            .append(command.get().getDescription())
+                            .append("\n");
+                    for (Command.Option data : options) {
+                        builder.append("└ ")
+                                .append("`").append(data.getName()).append("`")
+                                .append(": ").append(data.getDescription())
+                                .append("\n");
+                    }
+
+                    embedBuilder.setDescription(builder);
+                    return hook.sendMessageEmbeds(embedBuilder.build()).submit();
                 }
             });
         }, new OptionData(OptionType.STRING, "command", "Команда"));
-
-        commandListener.register("testcmd", "asdasd", i -> {}, new OptionData(OptionType.INTEGER, "p1", "param1"), new OptionData(OptionType.ROLE, "p2", "param2"));
 
         commandListener.update();
     }

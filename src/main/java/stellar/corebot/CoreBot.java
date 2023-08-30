@@ -4,7 +4,6 @@ import arc.util.ColorCodes;
 import arc.util.Log;
 import arc.util.Strings;
 import arc.util.Time;
-import mindustry.content.Blocks;
 import mindustry.net.Host;
 import mindustry.net.NetworkIO;
 import net.dv8tion.jda.api.EmbedBuilder;
@@ -28,7 +27,6 @@ import stellar.database.gen.Tables;
 import javax.imageio.ImageIO;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
@@ -36,11 +34,9 @@ import java.nio.ByteBuffer;
 import java.text.MessageFormat;
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Objects;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static stellar.corebot.Variables.*;
@@ -63,6 +59,7 @@ public class CoreBot {
                 .enableIntents(GatewayIntent.MESSAGE_CONTENT)
                 .build();
 
+        // region commands
         commandListener.register("playtime", "Время игры указанного или 10 лучших игроков", interaction -> {
             CompletableFuture<?> future = interaction.deferReply().submit();
             OptionMapping id = interaction.getOption("id");
@@ -337,6 +334,25 @@ public class CoreBot {
         }, new OptionData(OptionType.ATTACHMENT, "map", "Карта", true));
 
         commandListener.update();
+        // endregion
+
+        // region scheduled tasks
+        scheduler.scheduleAtFixedRate(() -> {
+            EmbedBuilder embedBuilder = new EmbedBuilder()
+                    .setTitle("Статус серверов")
+                    .setDescription("Обновляется каждые " + config.getStatusUpdatePeriod() + " секунд")
+                    .setColor(Colors.purple);
+
+            Const.servers.forEach((name, address) -> {
+                embedBuilder.addField(serverStatus(name, address));
+            });
+
+            embedBuilder.setTimestamp(Instant.now());
+            jda.getTextChannelById(config.getStatusChannel())
+                    .editMessageEmbedsById(config.getStatusMessage(), embedBuilder.build())
+                    .queue();
+        }, 0, config.getStatusUpdatePeriod(), TimeUnit.SECONDS);
+        // endregion
     }
 
     public static MessageEmbed.Field serverStatus(String name, String address) {

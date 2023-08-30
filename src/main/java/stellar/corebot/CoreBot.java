@@ -4,14 +4,17 @@ import arc.util.ColorCodes;
 import arc.util.Log;
 import arc.util.Strings;
 import arc.util.Time;
+import mindustry.game.Schematic;
 import mindustry.net.Host;
 import mindustry.net.NetworkIO;
+import mindustry.type.ItemStack;
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.entities.MessageEmbed;
 import net.dv8tion.jda.api.entities.User;
 import net.dv8tion.jda.api.entities.emoji.Emoji;
+import net.dv8tion.jda.api.entities.emoji.RichCustomEmoji;
 import net.dv8tion.jda.api.interactions.commands.Command;
 import net.dv8tion.jda.api.interactions.commands.OptionMapping;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
@@ -25,6 +28,7 @@ import stellar.database.DatabaseAsync;
 import stellar.database.gen.Tables;
 
 import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.DatagramPacket;
@@ -332,6 +336,60 @@ public class CoreBot {
                 }
             });
         }, new OptionData(OptionType.ATTACHMENT, "map", "Карта", true));
+
+        commandListener.register("schem", "Загрузить схему в канал", interaction -> {
+            interaction.deferReply().submit().thenComposeAsync(hook -> {
+                try {
+                    Message.Attachment attachment = interaction.getOption("schem").getAsAttachment();
+                    Schematic schematic = ContentHandler.parseSchematicURL(attachment.getUrl());
+                    BufferedImage previewSchematic = ContentHandler.previewSchematic(schematic);
+                    ByteArrayOutputStream previewStream = new ByteArrayOutputStream();
+                    ImageIO.write(previewSchematic, "png", previewStream);
+
+                    User author = interaction.getUser();
+                    EmbedBuilder embedBuilder = new EmbedBuilder()
+                            .setColor(Colors.purple)
+                            .setImage("attachment://preview.png")
+                            .setAuthor(author.getName(), author.getAvatarUrl(), author.getAvatarUrl())
+                            .setTitle(schematic.name() == null ? attachment.getFileName().replace(".msch", "") : schematic.name())
+                            .setFooter(schematic.description())
+                            .setTimestamp(Instant.now());
+
+                    StringBuilder cost = new StringBuilder();
+                    for (ItemStack stack : schematic.requirements()) {
+                        List<RichCustomEmoji> emotes = interaction.getGuild().getEmojisByName(stack.item.name.replace("-", ""), true);
+                        RichCustomEmoji result = emotes.isEmpty() ? interaction.getGuild().getEmojisByName("ohno", true).get(0) : emotes.get(0);
+                        cost.append(result.getAsMention()).append(stack.amount).append("  ");
+                    }
+                    embedBuilder.addField("Цена", cost.toString(), false);
+                    embedBuilder.addField("Потребление энергии", Integer.toString((int) schematic.powerConsumption()), false);
+                    embedBuilder.addField("Производство энергии", Integer.toString((int) schematic.powerProduction()), false);
+
+
+                    return jda.getTextChannelById(config.getSchematicsChannel())
+                            .sendMessageEmbeds(embedBuilder.build())
+                            .addFiles(FileUpload.fromData(ContentHandler.download(attachment.getUrl()), attachment.getFileName()))
+                            .addFiles(FileUpload.fromData(previewStream.toByteArray(), "preview.png"))
+                            .submit()
+                            .thenComposeAsync(message -> {
+                                message.addReaction(Emoji.fromUnicode("👍")).queue();
+                                message.addReaction(Emoji.fromUnicode("👎")).queue();
+                                EmbedBuilder successBuilder = new EmbedBuilder()
+                                        .setTitle("Схема отправлена")
+                                        .setColor(Colors.green);
+                                return hook.sendMessageEmbeds(successBuilder.build()).submit();
+                            });
+                } catch (Throwable t) {
+                    Log.err(t);
+                    EmbedBuilder embedBuilder = new EmbedBuilder()
+                            .setTitle("Не удалось отправить/обработать схему")
+                            .setDescription(t.toString())
+                            .setColor(Colors.red);
+
+                    return hook.sendMessageEmbeds(embedBuilder.build()).submit();
+                }
+            });
+        }, new OptionData(OptionType.ATTACHMENT, "schem", "Схема", true));
 
         commandListener.update();
         // endregion

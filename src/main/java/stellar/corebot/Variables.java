@@ -1,10 +1,12 @@
 package stellar.corebot;
 
+import arc.files.Fi;
 import mindustry.net.ArcNetProvider;
 import mindustry.net.Net;
 import net.dv8tion.jda.api.JDA;
 import stellar.corebot.command.CommandListener;
 
+import java.io.File;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 

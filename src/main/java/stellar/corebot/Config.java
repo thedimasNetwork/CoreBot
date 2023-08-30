@@ -11,8 +11,12 @@ import stellar.database.Database;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Enumeration;
 import java.util.Objects;
 
 @Data
@@ -39,7 +43,7 @@ public class Config {
 
         if (!new File(Const.homeFolder).exists()) {
             new File(Const.homeFolder).mkdirs();
-            // copy important resources if necessary
+            unpackResources();
         }
 
         if (!new File(Const.homeFolder + "bot.yaml").exists()) {
@@ -51,6 +55,45 @@ public class Config {
         }
         try {
             Variables.config = mapper.readValue(new File(Const.homeFolder + "bot.yaml"), Config.class);
+        } catch (IOException e) {
+            Log.err(e);
+        }
+    }
+
+    public static void unpackResources() {
+        try {
+            ClassLoader classLoader = Config.class.getClassLoader();
+
+            Path targetPath = Paths.get("bot");
+            Files.createDirectories(targetPath);
+
+            InputStream inputStream;
+            OutputStream outputStream;
+
+            Enumeration<URL> resources = classLoader.getResources("/");
+            while (resources.hasMoreElements()) {
+                URL resourceUrl = resources.nextElement();
+                String resourcePath = resourceUrl.getPath();
+                String resourceName = resourcePath.substring(resourcePath.lastIndexOf('/') + 1); // Get just the filename
+                try {
+                    inputStream = classLoader.getResourceAsStream(resourcePath);
+
+                    Path targetFilePath = targetPath.resolve(resourceName);
+
+                    outputStream = Files.newOutputStream(targetFilePath);
+
+                    byte[] buffer = new byte[1024];
+                    int length;
+                    while ((length = inputStream.read(buffer)) > 0) {
+                        outputStream.write(buffer, 0, length);
+                    }
+
+                    inputStream.close();
+                    outputStream.close();
+                } catch (IOException e) {
+                    Log.err("Unable to unpack " + resourceName, e);
+                }
+            }
         } catch (IOException e) {
             Log.err(e);
         }

@@ -1,51 +1,53 @@
 package stellar.corebot;
 
-import arc.files.Fi;
+import arc.*;
+import arc.files.*;
 import arc.graphics.Color;
-import arc.graphics.g2d.TextureAtlas;
-import arc.struct.ObjectMap;
-import arc.struct.StringMap;
+import arc.graphics.*;
+import arc.graphics.g2d.*;
+import arc.graphics.g2d.TextureAtlas.*;
+import arc.math.*;
+import arc.math.geom.*;
+import arc.struct.*;
 import arc.util.Http;
-import arc.util.Log;
-import arc.util.io.CounterInputStream;
-import mindustry.Vars;
-import mindustry.content.Blocks;
-import mindustry.core.ContentLoader;
-import mindustry.core.GameState;
-import mindustry.core.Version;
-import mindustry.core.World;
-import mindustry.ctype.Content;
-import mindustry.ctype.ContentType;
-import mindustry.game.Team;
-import mindustry.io.MapIO;
-import mindustry.io.SaveIO;
-import mindustry.io.SaveVersion;
-import mindustry.world.Block;
-import mindustry.world.CachedTile;
-import mindustry.world.Tile;
-import mindustry.world.WorldContext;
-import mindustry.world.blocks.environment.OreBlock;
+import arc.util.io.*;
+import mindustry.*;
+import mindustry.content.*;
+import mindustry.core.*;
+import mindustry.ctype.*;
+import mindustry.entities.units.*;
+import mindustry.game.*;
+import mindustry.game.Schematic.*;
+import mindustry.io.*;
+import mindustry.world.*;
+import mindustry.world.blocks.environment.*;
+import mindustry.world.blocks.legacy.*;
 
-import javax.imageio.ImageIO;
-import java.awt.image.BufferedImage;
-import java.io.DataInputStream;
-import java.io.IOException;
-import java.io.InputStream;
+import javax.imageio.*;
+import java.awt.*;
+import java.awt.geom.*;
+import java.awt.image.*;
+import java.io.*;
 import java.net.HttpURLConnection;
-import java.net.ProtocolException;
 import java.net.URL;
-import java.util.zip.InflaterInputStream;
+import java.util.zip.*;
+
+import static mindustry.Vars.*;
 
 public class ContentHandler {
     static Color co = new Color();
+    static Graphics2D currentGraphics;
+    static BufferedImage currentImage;
+    static ObjectMap<String, Fi> imageFiles = new ObjectMap<>();
+    static ObjectMap<String, BufferedImage> regions = new ObjectMap<>();
 
     public static void load() {
+        //clear cache
+        new Fi("cache").deleteDirectory();
+
         Version.enabled = false;
         Vars.content = new ContentLoader();
         Vars.content.createBaseContent();
-        Vars.world = new World();
-        Vars.state = new GameState();
-
         for (ContentType type : ContentType.all) {
             for (Content content : Vars.content.getBy(type)) {
                 try {
@@ -55,24 +57,193 @@ public class ContentHandler {
             }
         }
 
+        String assets = "bot/";
+        Vars.state = new GameState();
+
+        TextureAtlasData data = new TextureAtlasData(new Fi(assets + "sprites/sprites.aatls"), new Fi(assets + "sprites"), false);
+        Core.atlas = new TextureAtlas();
+
+        new Fi(assets + "sprites_out").walk(f -> {
+            if (f.extEquals("png")) {
+                imageFiles.put(f.nameWithoutExtension(), f);
+            }
+        });
+
+        data.getPages().each(page -> {
+            page.texture = Texture.createEmpty(null);
+            page.texture.width = page.width;
+            page.texture.height = page.height;
+        });
+
+        data.getRegions().each(reg -> Core.atlas.addRegion(reg.name, new AtlasRegion(reg.page.texture, reg.left, reg.top, reg.width, reg.height) {{
+            name = reg.name;
+            texture = reg.page.texture;
+        }}));
+
+        Lines.useLegacyLine = true;
+        Core.atlas.setErrorRegion("error");
+        Draw.scl = 1f / 4f;
+        Core.batch = new SpriteBatch(0) {
+            @Override
+            protected void draw(TextureRegion region, float x, float y, float originX, float originY, float width, float height, float rotation) {
+                x += 4;
+                y += 4;
+
+                x *= 4;
+                y *= 4;
+                width *= 4;
+                height *= 4;
+
+                y = currentImage.getHeight() - (y + height / 2f) - height / 2f;
+
+                AffineTransform at = new AffineTransform();
+                at.translate(x, y);
+                at.rotate(-rotation * Mathf.degRad, originX * 4, originY * 4);
+
+                currentGraphics.setTransform(at);
+                BufferedImage image = getImage(((AtlasRegion) region).name);
+                if (!color.equals(Color.white)) {
+                    image = tint(image, color);
+                }
+
+                currentGraphics.drawImage(image, 0, 0, (int) width, (int) height, null);
+            }
+
+            @Override
+            protected void draw(Texture texture, float[] spriteVertices, int offset, int count) {
+                //do nothing
+            }
+        };
+
+        for (ContentType type : ContentType.values()) {
+            for (Content content : Vars.content.getBy(type)) {
+                try {
+                    content.load();
+                    content.loadIcon();
+                } catch (Throwable ignored) {
+                }
+            }
+        }
+
         try {
-            BufferedImage image = ImageIO.read(ContentHandler.class.getClassLoader().getResource("block_colors.png"));
+            BufferedImage image = ImageIO.read(new File(assets + "sprites/block_colors.png"));
+
             for (Block block : Vars.content.blocks()) {
                 block.mapColor.argb8888(image.getRGB(block.id, 0));
                 if (block instanceof OreBlock) {
                     block.mapColor.set(block.itemDrop.color);
                 }
             }
-        } catch (IOException e) {
-            Log.err(e);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+
+        world = new World() {
+            public Tile tile(int x, int y) {
+                return new Tile(x, y);
+            }
+        };
+    }
+
+    private static BufferedImage getImage(String name) {
+        return regions.get(name, () -> {
+            try {
+                return ImageIO.read(imageFiles.get(name, imageFiles.get("error")).file());
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        });
+    }
+
+    private static BufferedImage tint(BufferedImage image, Color color) {
+        BufferedImage copy = new BufferedImage(image.getWidth(), image.getHeight(), image.getType());
+        Color tmp = new Color();
+        for (int x = 0; x < copy.getWidth(); x++) {
+            for (int y = 0; y < copy.getHeight(); y++) {
+                int argb = image.getRGB(x, y);
+                tmp.argb8888(argb);
+                tmp.mul(color);
+                copy.setRGB(x, y, tmp.argb8888());
+            }
+        }
+        return copy;
+    }
+
+    public static Schematic parseSchematicURL(String text) throws Exception {
+        return read(download(text));
+    }
+
+    private static Schematic read(InputStream input) throws IOException {
+        byte[] header = {'m', 's', 'c', 'h'};
+        for (byte b : header) {
+            if (input.read() != b) {
+                throw new IOException("Not a schematic file (missing header).");
+            }
+        }
+
+        //discard version
+        input.read();
+
+        try (DataInputStream stream = new DataInputStream(new InflaterInputStream(input))) {
+            short width = stream.readShort(), height = stream.readShort();
+
+            StringMap map = new StringMap();
+            byte tags = stream.readByte();
+            for (int i = 0; i < tags; i++) {
+                map.put(stream.readUTF(), stream.readUTF());
+            }
+
+            IntMap<Block> blocks = new IntMap<>();
+            byte length = stream.readByte();
+            for (int i = 0; i < length; i++) {
+                String name = stream.readUTF();
+                Block block = Vars.content.getByName(ContentType.block, SaveFileReader.fallback.get(name, name));
+                blocks.put(i, block == null || block instanceof LegacyBlock ? Blocks.air : block);
+            }
+
+            int total = stream.readInt();
+            if (total > 64 * 64) {
+                throw new IOException("Schematic has too many blocks.");
+            }
+            Seq<Stile> tiles = new Seq<>(total);
+            for (int i = 0; i < total; i++) {
+                Block block = blocks.get(stream.readByte());
+                int position = stream.readInt();
+                Object config = TypeIO.readObject(Reads.get(stream));
+                byte rotation = stream.readByte();
+                if (block != Blocks.air) {
+                    tiles.add(new Stile(block, Point2.x(position), Point2.y(position), config, rotation));
+                }
+            }
+
+            return new Schematic(tiles, map, width, height);
         }
     }
 
-    public static InputStream download(String url) throws IOException {
-        URL requestUrl = new URL(url);
-        HttpURLConnection connection = (HttpURLConnection) requestUrl.openConnection();
-        connection.setRequestMethod("GET");
-        return connection.getInputStream();
+    public static BufferedImage previewSchematic(Schematic schem) throws Exception {
+        if (schem.width > 64 || schem.height > 64) {
+            throw new IOException("Schematic cannot be larger than 64x64.");
+        }
+        BufferedImage image = new BufferedImage(schem.width * 32, schem.height * 32, BufferedImage.TYPE_INT_ARGB);
+
+        Draw.reset();
+        Seq<BuildPlan> requests = schem.tiles.map(t -> new BuildPlan(t.x, t.y, t.rotation, t.block, t.config));
+        currentGraphics = image.createGraphics();
+        currentImage = image;
+        requests.each(req -> {
+            req.animScale = 1f;
+            req.worldContext = false;
+            req.block.drawPlanRegion(req, requests);
+            Draw.reset();
+        });
+
+        requests.each(req -> req.block.drawPlanConfigTop(req, requests));
+
+        return image;
+    }
+
+    public static Map readMap(String url) throws IOException {
+        return readMap(Http.get(url).contentStream);
     }
 
     public static Map readMap(InputStream is) throws IOException {
@@ -126,12 +297,12 @@ public class ContentHandler {
 
                 @Override
                 public void begin() {
-                    Vars.world.setGenerating(true);
+                    world.setGenerating(true);
                 }
 
                 @Override
                 public void end() {
-                    Vars.world.setGenerating(false);
+                    world.setGenerating(false);
                 }
 
                 @Override
@@ -161,9 +332,9 @@ public class ContentHandler {
                 @Override
                 public Tile create(int x, int y, int floorID, int overlayID, int wallID) {
                     if (overlayID != 0) {
-                        floors.setRGB(x, floors.getHeight() - 1 - y, conv(MapIO.colorFor(Blocks.air, Blocks.air, Vars.content.block(overlayID), Team.derelict)));
+                        floors.setRGB(x, floors.getHeight() - 1 - y, conv(MapIO.colorFor(Blocks.air, Blocks.air, content.block(overlayID), Team.derelict)));
                     } else {
-                        floors.setRGB(x, floors.getHeight() - 1 - y, conv(MapIO.colorFor(Blocks.air, Vars.content.block(floorID), Blocks.air, Team.derelict)));
+                        floors.setRGB(x, floors.getHeight() - 1 - y, conv(MapIO.colorFor(Blocks.air, content.block(floorID), Blocks.air, Team.derelict)));
                     }
                     return tile;
                 }
@@ -177,12 +348,22 @@ public class ContentHandler {
             return out;
 
         } finally {
-            Vars.content.setTemporaryMapper(null);
+            content.setTemporaryMapper(null);
         }
     }
 
     static int conv(int rgba) {
         return co.set(rgba).argb8888();
+    }
+
+    public static InputStream download(String url) {
+        try {
+            HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
+            connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/56.0.2924.87 Safari/537.36");
+            return connection.getInputStream();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public static class Map {

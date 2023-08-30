@@ -295,7 +295,7 @@ public class CoreBot {
                         .collect(Collectors.toList())
         ));
 
-        commandListener.register("map", "Загрузить карту в канал", interaction -> {
+        commandListener.register("map", "Отправить карту", interaction -> {
             interaction.deferReply().submit().thenComposeAsync(hook -> {
                 try {
                     Message.Attachment attachment = interaction.getOption("map").getAsAttachment();
@@ -337,7 +337,7 @@ public class CoreBot {
             });
         }, new OptionData(OptionType.ATTACHMENT, "map", "Карта", true));
 
-        commandListener.register("schem", "Загрузить схему в канал", interaction -> {
+        commandListener.register("schem", "Отправить схему", interaction -> {
             interaction.deferReply().submit().thenComposeAsync(hook -> {
                 try {
                     Message.Attachment attachment = interaction.getOption("schem").getAsAttachment();
@@ -390,6 +390,25 @@ public class CoreBot {
                 }
             });
         }, new OptionData(OptionType.ATTACHMENT, "schem", "Схема", true));
+
+        commandListener.register("suggest", "Отправить предложение", interaction -> {
+            interaction.deferReply().submit().thenComposeAsync(hook -> {
+                String suggestion = interaction.getOption("suggestion").getAsString();
+                EmbedBuilder embedBuilder = new EmbedBuilder()
+                        .setDescription(suggestion)
+                        .setColor(Colors.purple)
+                        .setAuthor(interaction.getUser().getName(), interaction.getUser().getAvatarUrl(), interaction.getUser().getAvatarUrl());
+
+                jda.getTextChannelById(config.getSuggestionsChannel())
+                        .sendMessageEmbeds(embedBuilder.build())
+                        .queue();
+
+                EmbedBuilder successBuilder = new EmbedBuilder()
+                        .setTitle("Предложение отправлено")
+                        .setColor(Colors.green);
+                return hook.sendMessageEmbeds(successBuilder.build()).submit();
+            });
+        }, new OptionData(OptionType.STRING, "suggestion", "Предложение", true));
 
         commandListener.update();
         // endregion

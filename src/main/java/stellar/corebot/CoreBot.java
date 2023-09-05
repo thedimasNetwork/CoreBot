@@ -284,7 +284,7 @@ public class CoreBot {
                             .setColor(Colors.blue)
                             .setTimestamp(Instant.now());
 
-                    embedBuilder.addField(serverStatus(name, address));
+                    embedBuilder.addField(serverStatus(name, address, true));
                     return hook.sendMessageEmbeds(embedBuilder.build()).submit();
                 }
             });
@@ -433,6 +433,10 @@ public class CoreBot {
     }
 
     public static MessageEmbed.Field serverStatus(String name, String address) {
+        return serverStatus(name, address, false);
+    }
+
+    public static MessageEmbed.Field serverStatus(String name, String address, boolean description) {
         String[] split = address.split(":");
         String title = String.format("**%s** | *%s*", name, address);
         String text;
@@ -441,7 +445,8 @@ public class CoreBot {
             Host host = pingHost(split[0], Integer.parseInt(split[1]));
             text = "**Онлайн 🟢**\n" +
                     "Карта: **" + Strings.stripColors(host.mapname).trim() + "**\n" +
-                    "Игроков: **" + host.players + "**\n";
+                    "Игроков: **" + host.players + "**\n" +
+                    (description ? ("Описание: **" + Strings.stripColors(host.description)) + "**": "");
         } catch (IOException e) {
             text = "Оффлайн 🔴\n";
         }

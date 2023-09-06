@@ -1,9 +1,10 @@
 package stellar.corebot;
 
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.List;
 
 public class Const {
     public static final String homeFolder = "bot/";
@@ -51,4 +52,8 @@ public class Const {
             Побед: {3}
             Поражений: {4}
             """;
+
+    public static List<String> getServers()  {
+        return new ArrayList<>(Const.servers.keySet());
+    }
 }

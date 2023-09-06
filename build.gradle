@@ -19,7 +19,7 @@ ext {
     jdaVersion = "5.0.0-beta.13"
     jacksonYamlVersion = "2.14.2"
     jooqVersion = "3.17.0"
-    databaseVersion = "830c7e4745"
+    databaseVersion = "ea42d14e9c"
 }
 
 

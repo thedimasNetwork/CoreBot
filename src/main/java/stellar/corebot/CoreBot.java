@@ -10,6 +10,7 @@ import mindustry.net.NetworkIO;
 import mindustry.type.ItemStack;
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.JDABuilder;
+import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.entities.MessageEmbed;
 import net.dv8tion.jda.api.entities.User;
@@ -22,10 +23,13 @@ import net.dv8tion.jda.api.interactions.commands.build.OptionData;
 import net.dv8tion.jda.api.requests.GatewayIntent;
 import net.dv8tion.jda.api.utils.FileUpload;
 import org.jooq.Field;
+import org.jooq.Record1;
 import org.jooq.Record3;
 import org.jooq.impl.DSL;
+import stellar.database.Database;
 import stellar.database.DatabaseAsync;
 import stellar.database.gen.Tables;
+import stellar.database.gen.tables.records.UsersRecord;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
@@ -289,10 +293,10 @@ public class CoreBot {
                 }
             });
         }, new OptionData(OptionType.STRING, "server", "Сервер").addChoices(
-               Const.servers.keySet()
-                        .stream()
-                        .map(s -> new Command.Choice(convertToTitleCase(s), s))
-                        .collect(Collectors.toList())
+               Const.getServers()
+                       .stream()
+                       .map(s -> new Command.Choice(convertToTitleCase(s), s))
+                       .collect(Collectors.toList())
         ));
 
         commandListener.register("map", "Отправить карту", interaction -> {
@@ -409,6 +413,119 @@ public class CoreBot {
                 return hook.sendMessageEmbeds(successBuilder.build()).submit();
             });
         }, new OptionData(OptionType.STRING, "suggestion", "Предложение", true));
+
+        commandListener.register("find", "Найти игрока", interaction -> {
+            interaction.deferReply().submit().thenComposeAsync(hook -> {
+                if (!Util.isMindustryAdmin(interaction.getMember())) {
+                    MessageEmbed embed = Util.embedBuilder("В доступе отказано", Colors.red);
+                    event.replyEmbeds(embed).queue();
+                    return;
+                }
+
+                String type = interaction.getOption("type").getAsString();
+                String query = interaction.getOption("query").getAsString();
+
+                try {
+                    List<UsersRecord> records = new ArrayList<>();
+                    int count = 0;
+                    switch (type) {
+                        case "uuid" -> {
+                            UsersRecord record = Database.getPlayer(query);
+                            records = record != null ? List.of(record) : new ArrayList<UsersRecord>();
+                            count = records.size();
+                        }
+                        case "name" -> {
+                            StringBuilder builder = new StringBuilder();
+                            for (int i = 0; i < query.length(); i++) {
+                                builder.append("%").append(query.charAt(i));
+                            }
+                            builder.append("%");
+                            records = List.of(Database.getContext()
+                                    .selectFrom(Tables.users)
+                                    .where(Tables.users.name.likeIgnoreCase(builder.toString()))
+                                    .limit(15)
+                                    .fetchArray());
+                            Record1<Integer> record1 = Database.getContext()
+                                    .selectCount()
+                                    .from(Tables.users)
+                                    .where(Tables.users.name.likeIgnoreCase(builder.toString()))
+                                    .limit(15)
+                                    .fetchOne();
+                            count = record1 == null ? 0 : record1.value1();
+                        }
+                        case "id" -> {
+                            if (!Strings.canParseInt(query)) {
+                                MessageEmbed embed = Util.embedBuilder("Невалидный айди", Colors.red);
+                                event.replyEmbeds(embed).setEphemeral(true).queue();
+                                return;
+                            }
+                            UsersRecord record = Database.getPlayer(Strings.parseInt(query));
+                            records = record != null ? List.of(record) : new ArrayList<>();
+                            count = records.size();
+                        }
+                        case "ip" -> {
+                            records = List.of(Database.getContext()
+                                    .selectFrom(Tables.users)
+                                    .where(Tables.users.ip.contains(query))
+                                    .limit(15)
+                                    .fetchArray());
+                            Record1<Integer> record1 = Database.getContext()
+                                    .selectCount()
+                                    .from(Tables.users)
+                                    .where(Tables.users.ip.contains(query))
+                                    .limit(15)
+                                    .fetchOne();
+                            count = record1 == null ? 0 : record1.value1();
+                        }
+                    }
+
+                    if (count == 0) {
+                        MessageEmbed embed = Util.embedBuilder("Ничего не найдено", Colors.red);
+                        event.replyEmbeds(embed).setEphemeral(true).queue();
+                        return;
+                    }
+
+                    EmbedBuilder embedBuilder = new EmbedBuilder()
+                            .setTitle(String.format("Найдено %s записей", count))
+                            .setFooter(count > 15 ? "Показано только 15 записей. Задайте запрос конкретнее" : null) // TODO: pages
+                            .setColor(Colors.blue);
+
+                    boolean admin = event.getMember().hasPermission(Permission.ADMINISTRATOR);
+                    records.each(record -> {
+                        String banned = "???";
+                        try {
+                            banned = StringUtils.fancyBool(Database.isBanned(record.getUuid()));
+                        } catch (SQLException e) {
+                            Log.err(e);
+                        }
+
+                        String uuid = admin ? record.getUuid() : StringUtils.obfuscate(record.getUuid(), 5, false);
+                        String ip = admin ? record.getIp() : StringUtils.obfuscate(record.getIp(), true);
+                        String status = Const.statusNames.get(record.getStatus(), record.getStatus().name());
+
+                        String message = String.format("""
+                                UUID: `%s`
+                                Имя: %s
+                                Айди: %s
+                                Последний айпи: %s
+                                Статус: %s
+                                Забанен: %s
+                                """, uuid, record.getName(), record.getId(), ip, status, banned);
+                        embedBuilder.addField(Strings.stripColors("**" + record.getName()) + "**", message, false);
+                    });
+                    event.replyEmbeds(embedBuilder.build()).setEphemeral(true).queue();
+                } catch (SQLException e) {
+                    Log.err(e);
+                    event.replyEmbeds(Util.embedBuilder("Возникла ошибка", Colors.red)).setEphemeral(true).queue();
+                }
+            });
+
+        }, new OptionData(OptionType.STRING, "type", "Тип информации по которой искать", true).addChoices(
+                new Command.Choice("name", "Имя"),
+                new Command.Choice("id", "ID"),
+                new Command.Choice("uuid", "UUID"),
+                new Command.Choice("ip", "IP")
+        ));
 
         commandListener.update();
         // endregion

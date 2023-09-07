@@ -1,5 +1,7 @@
 package stellar.corebot;
 
+import stellar.database.enums.PlayerStatus;
+
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -26,6 +28,14 @@ public class Const {
             put("crawler_arena", "play.thedimas.pp.ua:6511");
             put("zone_capture", "play.thedimas.pp.ua:6512");
     }};
+
+    public static final HashMap<PlayerStatus, String> statusNames = new LinkedHashMap<>() {{
+            put(PlayerStatus.basic, "Игрок :bust_in_silhouette:");
+            put(PlayerStatus.admin, "Админ :hammer:");
+            put(PlayerStatus.console, "Консоль :wrench:");
+            put(PlayerStatus.owner, "Владелец :crown:");
+    }};
+
 
     public static final DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm:ss");
     public static final String minuteFormat = "{0}м",

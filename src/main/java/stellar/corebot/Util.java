@@ -5,11 +5,11 @@ import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.MessageEmbed;
 
-import java.awt.*;
+import java.awt.Color;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
-
-import static stellar.plugin.Variables.config;
+import java.util.Arrays;
+import java.util.stream.Collectors;
 
 public class Util {
     public static MessageEmbed embedBuilder(String text, Color color) {
@@ -47,12 +47,14 @@ public class Util {
         return member.hasPermission(Permission.ADMINISTRATOR);
     }
 
-    public static String repeat(String string, int number) {
-        StringBuilder builder = new StringBuilder();
-        for (int i = 0; i < number; i++) {
-            builder.append(string);
-        }
-        return builder.toString();
+    public static String fancyBool(boolean bool) {
+        return bool ? "✔" : "✘";
+    }
+
+    public static <T> String fancyArray(T[] array) {
+        return array.length > 0 ? ("[`" + Arrays.stream(array)
+                .map(T::toString)
+                .collect(Collectors.joining("`, `")) + "`]") : "[]";
     }
 
     public static String obfuscate(String string, boolean escape) {
@@ -60,6 +62,6 @@ public class Util {
     }
 
     public static String obfuscate(String string, int chars, boolean escape) {
-        return string.substring(0, chars) + repeat(escape ? "\\*" : "*", string.length() - chars * 2) + string.substring(string.length() - chars);
+        return string.substring(0, chars) + (escape ? "\\*" : "*").repeat(string.length() - chars * 2) + string.substring(string.length() - chars);
     }
 }

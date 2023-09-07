@@ -407,125 +407,115 @@ public class CoreBot {
                         .sendMessageEmbeds(embedBuilder.build())
                         .queue();
 
-                EmbedBuilder successBuilder = new EmbedBuilder()
-                        .setTitle("Предложение отправлено")
-                        .setColor(Colors.green);
-                return hook.sendMessageEmbeds(successBuilder.build()).submit();
+                return hook.sendMessageEmbeds(Util.embedBuilder("Предложение отправлено", Colors.green)).submit();
             });
         }, new OptionData(OptionType.STRING, "suggestion", "Предложение", true));
 
         commandListener.register("find", "Найти игрока", interaction -> {
-            interaction.deferReply().submit().thenComposeAsync(hook -> {
+            interaction.deferReply(true)
+                    .submit()
+                    .thenComposeAsync(hook -> {
                 if (!Util.isMindustryAdmin(interaction.getMember())) {
-                    MessageEmbed embed = Util.embedBuilder("В доступе отказано", Colors.red);
-                    event.replyEmbeds(embed).queue();
-                    return;
+                    return hook.sendMessageEmbeds(Util.embedBuilder("В доступе отказано", Colors.red))
+                            .submit();
                 }
 
                 String type = interaction.getOption("type").getAsString();
                 String query = interaction.getOption("query").getAsString();
 
-                try {
-                    List<UsersRecord> records = new ArrayList<>();
-                    int count = 0;
-                    switch (type) {
-                        case "uuid" -> {
-                            UsersRecord record = Database.getPlayer(query);
-                            records = record != null ? List.of(record) : new ArrayList<UsersRecord>();
-                            count = records.size();
-                        }
-                        case "name" -> {
-                            StringBuilder builder = new StringBuilder();
-                            for (int i = 0; i < query.length(); i++) {
-                                builder.append("%").append(query.charAt(i));
-                            }
-                            builder.append("%");
-                            records = List.of(Database.getContext()
-                                    .selectFrom(Tables.users)
-                                    .where(Tables.users.name.likeIgnoreCase(builder.toString()))
-                                    .limit(15)
-                                    .fetchArray());
-                            Record1<Integer> record1 = Database.getContext()
-                                    .selectCount()
-                                    .from(Tables.users)
-                                    .where(Tables.users.name.likeIgnoreCase(builder.toString()))
-                                    .limit(15)
-                                    .fetchOne();
-                            count = record1 == null ? 0 : record1.value1();
-                        }
-                        case "id" -> {
-                            if (!Strings.canParseInt(query)) {
-                                MessageEmbed embed = Util.embedBuilder("Невалидный айди", Colors.red);
-                                event.replyEmbeds(embed).setEphemeral(true).queue();
-                                return;
-                            }
-                            UsersRecord record = Database.getPlayer(Strings.parseInt(query));
-                            records = record != null ? List.of(record) : new ArrayList<>();
-                            count = records.size();
-                        }
-                        case "ip" -> {
-                            records = List.of(Database.getContext()
-                                    .selectFrom(Tables.users)
-                                    .where(Tables.users.ip.contains(query))
-                                    .limit(15)
-                                    .fetchArray());
-                            Record1<Integer> record1 = Database.getContext()
-                                    .selectCount()
-                                    .from(Tables.users)
-                                    .where(Tables.users.ip.contains(query))
-                                    .limit(15)
-                                    .fetchOne();
-                            count = record1 == null ? 0 : record1.value1();
-                        }
+                List<UsersRecord> records = new ArrayList<>();
+                int count = 0;
+                switch (type) {
+                    case "uuid" -> {
+                        UsersRecord record = Database.getPlayer(query);
+                        records = record != null ? List.of(record) : new ArrayList<UsersRecord>();
+                        count = records.size();
                     }
-
-                    if (count == 0) {
-                        MessageEmbed embed = Util.embedBuilder("Ничего не найдено", Colors.red);
-                        event.replyEmbeds(embed).setEphemeral(true).queue();
-                        return;
-                    }
-
-                    EmbedBuilder embedBuilder = new EmbedBuilder()
-                            .setTitle(String.format("Найдено %s записей", count))
-                            .setFooter(count > 15 ? "Показано только 15 записей. Задайте запрос конкретнее" : null) // TODO: pages
-                            .setColor(Colors.blue);
-
-                    boolean admin = event.getMember().hasPermission(Permission.ADMINISTRATOR);
-                    records.each(record -> {
-                        String banned = "???";
-                        try {
-                            banned = StringUtils.fancyBool(Database.isBanned(record.getUuid()));
-                        } catch (SQLException e) {
-                            Log.err(e);
+                    case "name" -> {
+                        StringBuilder builder = new StringBuilder();
+                        for (int i = 0; i < query.length(); i++) {
+                            builder.append("%").append(query.charAt(i));
                         }
-
-                        String uuid = admin ? record.getUuid() : StringUtils.obfuscate(record.getUuid(), 5, false);
-                        String ip = admin ? record.getIp() : StringUtils.obfuscate(record.getIp(), true);
-                        String status = Const.statusNames.get(record.getStatus(), record.getStatus().name());
-
-                        String message = String.format("""
-                                UUID: `%s`
-                                Имя: %s
-                                Айди: %s
-                                Последний айпи: %s
-                                Статус: %s
-                                Забанен: %s
-                                """, uuid, record.getName(), record.getId(), ip, status, banned);
-                        embedBuilder.addField(Strings.stripColors("**" + record.getName()) + "**", message, false);
-                    });
-                    event.replyEmbeds(embedBuilder.build()).setEphemeral(true).queue();
-                } catch (SQLException e) {
-                    Log.err(e);
-                    event.replyEmbeds(Util.embedBuilder("Возникла ошибка", Colors.red)).setEphemeral(true).queue();
+                        builder.append("%");
+                        records = List.of(Database.getContext()
+                                .selectFrom(Tables.users)
+                                .where(Tables.users.name.likeIgnoreCase(builder.toString()))
+                                .limit(15)
+                                .fetchArray());
+                        Record1<Integer> record1 = Database.getContext()
+                                .selectCount()
+                                .from(Tables.users)
+                                .where(Tables.users.name.likeIgnoreCase(builder.toString()))
+                                .limit(15)
+                                .fetchOne();
+                        count = record1 == null ? 0 : record1.value1();
+                    }
+                    case "id" -> {
+                        if (!Strings.canParseInt(query)) {
+                            return hook.sendMessageEmbeds(Util.embedBuilder("Невалидный айди", Colors.red))
+                                    .submit();
+                        }
+                        UsersRecord record = Database.getPlayer(Strings.parseInt(query));
+                        records = record != null ? List.of(record) : new ArrayList<>();
+                        count = records.size();
+                    }
+                    case "ip" -> {
+                        records = List.of(Database.getContext()
+                                .selectFrom(Tables.users)
+                                .where(Tables.users.ip.contains(query))
+                                .limit(15)
+                                .fetchArray());
+                        Record1<Integer> record1 = Database.getContext()
+                                .selectCount()
+                                .from(Tables.users)
+                                .where(Tables.users.ip.contains(query))
+                                .limit(15)
+                                .fetchOne();
+                        count = record1 == null ? 0 : record1.value1();
+                    }
                 }
-            });
 
+                if (count == 0) {
+                    MessageEmbed embed = Util.embedBuilder("Ничего не найдено", Colors.red);
+                    return hook.sendMessageEmbeds(embed)
+                            .submit();
+                }
+
+                EmbedBuilder embedBuilder = new EmbedBuilder()
+                        .setTitle(String.format("Найдено %s записей", count))
+                        .setFooter(count > 15 ? "Показано только 15 записей. Задайте запрос конкретнее" : null) // TODO: pages
+                        .setColor(Colors.blue);
+
+                boolean admin = interaction.getMember().hasPermission(Permission.ADMINISTRATOR);
+                records.forEach(record -> {
+                    String banned = Util.fancyBool(Database.isBanned(record.getUuid()));
+                    String uuid = admin ? record.getUuid() : Util.obfuscate(record.getUuid(), 5, false);
+                    String ip = admin ? record.getIp() : Util.obfuscate(record.getIp(), true);
+                    String status = Const.statusNames.get(record.getStatus());
+                    String usedNames = admin ?  Util.fancyArray(Database.getNames(record.getUuid())) : "[*null*]";
+                    String usedIps = admin ? Util.fancyArray(Database.getIps(record.getUuid())) : "[*null*]";
+
+                    String message = String.format("""
+                            UUID: `%s`
+                            Имя: %s
+                            Айди: %s
+                            Последний айпи: `%s`
+                            Статус: %s
+                            Забанен: %s
+                            Все имена: %s
+                            Все айпи: %s
+                            """, uuid, record.getName(), record.getId(), ip, status, banned, usedNames, usedIps);
+                    embedBuilder.addField(Strings.stripColors("**" + record.getName()) + "**", message, false);
+                });
+                return hook.sendMessageEmbeds(embedBuilder.build())
+                                .submit();
+            });
         }, new OptionData(OptionType.STRING, "type", "Тип информации по которой искать", true).addChoices(
-                new Command.Choice("name", "Имя"),
-                new Command.Choice("id", "ID"),
-                new Command.Choice("uuid", "UUID"),
-                new Command.Choice("ip", "IP")
-        ));
+                new Command.Choice("Имя", "name"),
+                new Command.Choice("ID", "id"),
+                new Command.Choice("UUID", "uuid"),
+                new Command.Choice("IP", "ip")
+        ), new OptionData(OptionType.STRING, "query", "Запрос", true));
 
         commandListener.update();
         // endregion

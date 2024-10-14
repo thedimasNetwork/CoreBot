@@ -22,6 +22,7 @@ import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.interactions.commands.build.OptionData;
 import net.dv8tion.jda.api.requests.GatewayIntent;
 import net.dv8tion.jda.api.utils.FileUpload;
+import net.dv8tion.jda.api.utils.messages.MessageCreateBuilder;
 import org.jooq.Field;
 import org.jooq.Record1;
 import org.jooq.Record3;
@@ -29,6 +30,7 @@ import org.jooq.impl.DSL;
 import stellar.database.Database;
 import stellar.database.DatabaseAsync;
 import stellar.database.gen.Tables;
+import stellar.database.gen.tables.records.BansRecord;
 import stellar.database.gen.tables.records.UsersRecord;
 
 import javax.imageio.ImageIO;
@@ -42,6 +44,7 @@ import java.nio.ByteBuffer;
 import java.text.MessageFormat;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -516,6 +519,62 @@ public class CoreBot {
                 new Command.Choice("UUID", "uuid"),
                 new Command.Choice("IP", "ip")
         ), new OptionData(OptionType.STRING, "query", "Запрос", true));
+
+        commandListener.register("ban-trace", "Трассировака бана/-ов для указанного пользователя", interaction -> {
+            interaction.deferReply(true)
+                    .submit()
+                    .thenComposeAsync(hook -> {
+                        UsersRecord record = Database.getPlayer(interaction.getOption("id").getAsInt());
+                        var userIps = DSL.selectDistinct(Tables.logins.ip)
+                                .from(Tables.logins)
+                                .where(Tables.logins.uuid.eq(record.getUuid()));
+
+                        var bannedIps = DSL.selectDistinct(Tables.logins.ip, Tables.bans.asterisk())
+                                .from(Tables.logins)
+                                .join(Tables.users).on(Tables.logins.uuid.eq(Tables.users.uuid))
+                                .join(Tables.bans).on(Tables.bans.target.eq(Tables.users.uuid));
+
+                        Integer[] banIds = Database.getContext()
+                                .select(bannedIps.field("id"))
+                                .from(Tables.users)
+                                .join(userIps).on(Tables.users.uuid.eq(record.getUuid()))
+                                .leftJoin(bannedIps).on(userIps.field("ip", String.class).eq(bannedIps.field("ip", String.class)))
+                                .where(bannedIps.field("ip").isNotNull())
+                                .orderBy(bannedIps.field("id").desc())
+                                .fetchArray(0, Integer.class);
+
+                        BansRecord[] bans = Database.getContext()
+                                .selectFrom(Tables.bans)
+                                .where(Tables.bans.id.in(banIds))
+                                .orderBy(Tables.bans.id.desc())
+                                .fetchArray(); // I know that I could've used Database.getBans, but it returns only active bans
+
+                        MessageCreateBuilder messageBuilder = new MessageCreateBuilder()
+                                .setContent("Трассировка банов для **" + Strings.stripColors(record.getName()) + "** / `" + record.getId() + "`:");
+                        for (int i = 0; i < Math.min(bans.length, 10); i++) {
+                            BansRecord ban = bans[i];
+                            String title = (ban.getTarget().equals(record.getUuid()) ? "Оригинальный бан" : "Рекурсивный бан") + " #" + ban.getId();
+                            String content = String.format("""
+                                            **Админ**: %s
+                                            **Нарушитель**: %s
+                                            **Причина**: %s
+                                            **Срок**: %s
+                                            **Активен**: %s
+                                            """,
+                                    ban.getAdmin(),
+                                    ban.getTarget(),
+                                    ban.getReason(),
+                                    ban.getUntil() != null ? String.format("<t:%d:f>", ban.getUntil().toEpochSecond()) : "Перманентный",
+                                    Util.fancyBool(ban.isActive()));
+
+                            messageBuilder.addEmbeds(Util.embedBuilder(title, content, ban.getTarget().equals(record.getUuid()) ? Colors.red : Colors.blue));
+                        }
+                        return hook.sendMessage(messageBuilder.build()).submit();
+                    }).exceptionally(e -> {
+                        Log.err(e);
+                        return null;
+                    });
+        }, new OptionData(OptionType.INTEGER, "id", "ID игрока", true));
 
         commandListener.update();
         // endregion

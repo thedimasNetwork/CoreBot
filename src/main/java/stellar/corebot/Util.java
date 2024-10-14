@@ -4,6 +4,8 @@ import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.MessageEmbed;
+import stellar.database.Database;
+import stellar.database.gen.Tables;
 
 import java.awt.Color;
 import java.time.LocalDateTime;
@@ -63,5 +65,15 @@ public class Util {
 
     public static String obfuscate(String string, int chars, boolean escape) {
         return string.substring(0, chars) + (escape ? "\\*" : "*").repeat(string.length() - chars * 2) + string.substring(string.length() - chars);
+    }
+
+    public static int ipUsed(String uuid, String ip) {
+        return Database.getContext()
+                .selectCount()
+                .from(Tables.logins)
+                .where(Tables.logins.uuid.eq(uuid))
+                .and(Tables.logins.ip.eq(ip))
+                .fetchOne()
+                .value1();
     }
 }

@@ -525,22 +525,22 @@ public class CoreBot {
                     .submit()
                     .thenComposeAsync(hook -> {
                         UsersRecord record = Database.getPlayer(interaction.getOption("id").getAsInt());
-                        var userIps = DSL.selectDistinct(Tables.logins.ip)
+                        var userIpsQuery = DSL.selectDistinct(Tables.logins.ip)
                                 .from(Tables.logins)
                                 .where(Tables.logins.uuid.eq(record.getUuid()));
 
-                        var bannedIps = DSL.selectDistinct(Tables.logins.ip, Tables.bans.asterisk())
+                        var bannedIpsQuery = DSL.selectDistinct(Tables.logins.ip, Tables.bans.asterisk())
                                 .from(Tables.logins)
                                 .join(Tables.users).on(Tables.logins.uuid.eq(Tables.users.uuid))
                                 .join(Tables.bans).on(Tables.bans.target.eq(Tables.users.uuid));
 
                         Integer[] banIds = Database.getContext()
-                                .select(bannedIps.field("id"))
+                                .select(bannedIpsQuery.field("id"))
                                 .from(Tables.users)
-                                .join(userIps).on(Tables.users.uuid.eq(record.getUuid()))
-                                .leftJoin(bannedIps).on(userIps.field("ip", String.class).eq(bannedIps.field("ip", String.class)))
-                                .where(bannedIps.field("ip").isNotNull())
-                                .orderBy(bannedIps.field("id").desc())
+                                .join(userIpsQuery).on(Tables.users.uuid.eq(record.getUuid()))
+                                .leftJoin(bannedIpsQuery).on(userIpsQuery.field("ip", String.class).eq(bannedIpsQuery.field("ip", String.class)))
+                                .where(bannedIpsQuery.field("ip").isNotNull())
+                                .orderBy(bannedIpsQuery.field("id").desc())
                                 .fetchArray(0, Integer.class);
 
                         BansRecord[] bans = Database.getContext()
@@ -553,21 +553,37 @@ public class CoreBot {
                                 .setContent("Трассировка банов для **" + Strings.stripColors(record.getName()) + "** / `" + record.getId() + "`:");
                         for (int i = 0; i < Math.min(bans.length, 10); i++) {
                             BansRecord ban = bans[i];
+
+                            List<String> userIps = null, bannedIps = null, commonIps = new ArrayList<>();
+                            if (!ban.getTarget().equals(record.getUuid())) {
+                                userIps = new ArrayList<>(List.of(Database.getIps(record.getUuid())));
+                                bannedIps = List.of(Database.getIps(ban.getTarget()));
+                                commonIps = userIps;
+                                commonIps.retainAll(bannedIps);
+                            }
+
                             String title = (ban.getTarget().equals(record.getUuid()) ? "Оригинальный бан" : "Рекурсивный бан") + " #" + ban.getId();
-                            String content = String.format("""
+                            StringBuilder content = new StringBuilder(String.format("""
                                             **Админ**: %s
                                             **Нарушитель**: %s
                                             **Причина**: %s
+                                            **Дата**: %s
                                             **Срок**: %s
                                             **Активен**: %s
                                             """,
                                     ban.getAdmin(),
                                     ban.getTarget(),
                                     ban.getReason(),
+                                    String.format("<t:%d:f>", ban.getCreated().toEpochSecond()),
                                     ban.getUntil() != null ? String.format("<t:%d:f>", ban.getUntil().toEpochSecond()) : "Перманентный",
-                                    Util.fancyBool(ban.isActive()));
+                                    Util.fancyBool(ban.isActive())));
 
-                            messageBuilder.addEmbeds(Util.embedBuilder(title, content, ban.getTarget().equals(record.getUuid()) ? Colors.red : Colors.blue));
+                            if (!commonIps.isEmpty()) content.append("\n").append("**Совпадения IP**:");
+                            for (String ip : commonIps) {
+                                content.append("\n").append(String.format("* **%s**: B-%d/T-%d", ip, Util.ipUsed(ban.getTarget(), ip), Util.ipUsed(record.getUuid(), ip)));
+                            }
+
+                            messageBuilder.addEmbeds(Util.embedBuilder(title, content.toString().strip(), ban.getTarget().equals(record.getUuid()) ? Colors.red : Colors.blue));
                         }
                         return hook.sendMessage(messageBuilder.build()).submit();
                     }).exceptionally(e -> {

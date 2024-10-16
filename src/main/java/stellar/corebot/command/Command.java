@@ -35,6 +35,7 @@ public class Command {
                                     ```
                                     """, interaction.getCommandString(), interaction.getCommandId(), Strings.getStackTrace(th)),
                             Colors.red)).submit();
+                    return null;
                 });
     }
 }

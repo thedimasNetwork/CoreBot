@@ -29,6 +29,7 @@ public class Config {
     private long schematicsChannel;
     private long suggestionsChannel;
     private long botChannel;
+    private long logChannel;
 
     private long statusChannel;
     private long statusMessage;

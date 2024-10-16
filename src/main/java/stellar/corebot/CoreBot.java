@@ -106,9 +106,6 @@ public class CoreBot {
 
                     embedBuilder.setDescription(builder);
                     return interaction.getHook().sendMessageEmbeds(embedBuilder.build()).submit();
-                }).exceptionally(throwable -> {
-                    Log.err(throwable);
-                    return null;
                 });
             } else {
                 future.thenComposeAsync(ignored ->
@@ -145,16 +142,13 @@ public class CoreBot {
                     }
 
                     return interaction.getHook().sendMessageEmbeds(embedBuilder.build()).submit();
-                }).exceptionally(throwable -> {
-                    Log.err(throwable);
-                    return null;
                 });
             }
-
+            return future;
         }, new OptionData(OptionType.INTEGER, "id", "Айди игрока"));
 
         commandListener.register("stats", "Статистика игры для указанного игрока", interaction -> {
-            interaction.deferReply().submit().thenComposeAsync(ignored ->
+            return interaction.deferReply().submit().thenComposeAsync(ignored ->
                     DatabaseAsync.getPlayerAsync(Objects.requireNonNull(interaction.getOption("id")).getAsInt())
             ).thenComposeAsync(player -> {
                 if (player == null) {
@@ -195,15 +189,11 @@ public class CoreBot {
                     return interaction.getHook().sendMessageEmbeds(gameStats.build(), hexStats.build()).submit();
                 }
 
-            }).exceptionally(throwable -> {
-                Log.err(throwable);
-                return null;
             });
-
         }, new OptionData(OptionType.INTEGER, "id", "Айди игрока", true));
 
         commandListener.register("help", "Справка по командам", interaction -> {
-            interaction.deferReply().submit().thenCombineAsync(jda.retrieveCommands().submit(), (hook, commands) -> {
+            return interaction.deferReply().submit().thenCombineAsync(jda.retrieveCommands().submit(), (hook, commands) -> {
                 OptionMapping cmd = interaction.getOption("command");
                 if (cmd == null) {
                     StringBuilder builder = new StringBuilder();
@@ -263,7 +253,7 @@ public class CoreBot {
         }, new OptionData(OptionType.STRING, "command", "Команда"));
 
         commandListener.register("status", "Получить статус указанного или всех серверов", interaction -> {
-            interaction.deferReply().submit().thenComposeAsync(hook -> {
+            return interaction.deferReply().submit().thenComposeAsync(hook -> {
                 OptionMapping server = interaction.getOption("server");
                 if (server == null) {
                     EmbedBuilder embedBuilder = new EmbedBuilder()
@@ -303,7 +293,7 @@ public class CoreBot {
         ));
 
         commandListener.register("map", "Отправить карту", interaction -> {
-            interaction.deferReply().submit().thenComposeAsync(hook -> {
+            return interaction.deferReply().submit().thenComposeAsync(hook -> {
                 try {
                     Message.Attachment attachment = interaction.getOption("map").getAsAttachment();
                     ContentHandler.Map map = ContentHandler.readMap(ContentHandler.download(attachment.getUrl()));
@@ -345,7 +335,7 @@ public class CoreBot {
         }, new OptionData(OptionType.ATTACHMENT, "map", "Карта", true));
 
         commandListener.register("schem", "Отправить схему", interaction -> {
-            interaction.deferReply().submit().thenComposeAsync(hook -> {
+            return interaction.deferReply().submit().thenComposeAsync(hook -> {
                 try {
                     Message.Attachment attachment = interaction.getOption("schem").getAsAttachment();
                     Schematic schematic = ContentHandler.parseSchematicURL(attachment.getUrl());
@@ -399,7 +389,7 @@ public class CoreBot {
         }, new OptionData(OptionType.ATTACHMENT, "schem", "Схема", true));
 
         commandListener.register("suggest", "Отправить предложение", interaction -> {
-            interaction.deferReply().submit().thenComposeAsync(hook -> {
+            return interaction.deferReply().submit().thenComposeAsync(hook -> {
                 String suggestion = interaction.getOption("suggestion").getAsString();
                 EmbedBuilder embedBuilder = new EmbedBuilder()
                         .setDescription(suggestion)
@@ -415,9 +405,7 @@ public class CoreBot {
         }, new OptionData(OptionType.STRING, "suggestion", "Предложение", true));
 
         commandListener.register("find", "Найти игрока", interaction -> {
-            interaction.deferReply(true)
-                    .submit()
-                    .thenComposeAsync(hook -> {
+            return interaction.deferReply(true).submit().thenComposeAsync(hook -> {
                 if (!Util.isMindustryAdmin(interaction.getMember())) {
                     return hook.sendMessageEmbeds(Util.embedBuilder("В доступе отказано", Colors.red))
                             .submit();
@@ -521,9 +509,7 @@ public class CoreBot {
         ), new OptionData(OptionType.STRING, "query", "Запрос", true));
 
         commandListener.register("ban-trace", "Трассировака бана/-ов для указанного пользователя", interaction -> {
-            interaction.deferReply(true)
-                    .submit()
-                    .thenComposeAsync(hook -> {
+            return interaction.deferReply(true).submit().thenComposeAsync(hook -> {
                         UsersRecord record = Database.getPlayer(interaction.getOption("id").getAsInt());
                         var userIpsQuery = DSL.selectDistinct(Tables.logins.ip)
                                 .from(Tables.logins)

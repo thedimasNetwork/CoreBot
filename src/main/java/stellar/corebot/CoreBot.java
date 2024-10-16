@@ -202,15 +202,9 @@ public class CoreBot {
                             .setColor(Colors.yellow);
                     commands.forEach(command -> {
                         List<Command.Option> options = command.getOptions();
-                        builder.append("</").append(command.getName()).append(":").append(command.getId()).append(">")
-                                .append(" - ")
-                                .append(command.getDescription())
-                                .append("\n");
+                        builder.append(String.format("</%s:%s> - %s\n", command.getName(), command.getId(), command.getDescription()));
                         for (Command.Option data : options) {
-                            builder.append("└ ")
-                                    .append("`").append(data.getName()).append("`")
-                                    .append(": ").append(data.getDescription())
-                                    .append("\n");
+                            builder.append(String.format("└ `%s`: %s\n", data.getName(), data.getDescription()));
                         }
                         builder.append("\n");
                     });

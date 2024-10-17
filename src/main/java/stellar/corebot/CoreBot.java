@@ -34,6 +34,7 @@ import stellar.database.gen.tables.records.BansRecord;
 import stellar.database.gen.tables.records.UsersRecord;
 
 import javax.imageio.ImageIO;
+import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -46,6 +47,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.util.*;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -530,7 +532,7 @@ public class CoreBot {
                         .fetchArray(); // I know that I could've used Database.getBans, but it returns only active bans
 
                 if (bans.length == 0) {
-                    return hook.sendMessageEmbeds(Util.embedBuilder("Игрок не забанен", Colors.yellow)).submit();
+                    return hook.sendMessageEmbeds(Util.embedBuilder("Ничего не найдено", Colors.yellow)).submit();
                 }
 
                 Set<String> uuids = Arrays.stream(bans).map(BansRecord::getTarget).collect(Collectors.toSet());
@@ -555,6 +557,7 @@ public class CoreBot {
                         commonIps.retainAll(bannedIps);
                     }
 
+                    boolean active = ban.isActive() && (ban.getUntil() == null || ban.getUntil().isBefore(OffsetDateTime.now()));
                     String title = (ban.getTarget().equals(record.getUuid()) ? "Оригинальный бан" : "Рекурсивный бан") + " #" + ban.getId();
                     StringBuilder content = new StringBuilder(String.format("""
                                     **Админ**: %s
@@ -571,21 +574,24 @@ public class CoreBot {
                             ban.getReason(),
                             String.format("<t:%d:f>", ban.getCreated().toEpochSecond()),
                             ban.getUntil() != null ? String.format("<t:%d:f>", ban.getUntil().toEpochSecond()) : "Перманентный",
-                            Util.fancyBool(ban.isActive())));
+                            Util.fancyBool(active)));
 
                     if (!commonIps.isEmpty()) content.append("\n").append("**Совпадения IP**:");
                     for (String ip : commonIps) {
                         content.append("\n").append(String.format("* **%s**: B-%d/T-%d", ip, Util.ipUsed(ban.getTarget(), ip), Util.ipUsed(record.getUuid(), ip)));
                     }
-
-                    messageBuilder.addEmbeds(Util.embedBuilder(title, content.toString().strip(), ban.getTarget().equals(record.getUuid()) ? Colors.red : Colors.blue));
+                    Color color = active ?
+                            (ban.getTarget().equals(record.getUuid()) ? Colors.red : Colors.blue) :
+                            Colors.gray;
+                    messageBuilder.addEmbeds(Util.embedBuilder(title, content.toString().strip(), color));
                 }
                 return hook.sendMessage(messageBuilder.build()).submit();
             }).exceptionally(e -> {
                 Log.err(e);
                 return null;
             });
-        }, new OptionData(OptionType.INTEGER, "id", "ID игрока", true));
+        },new OptionData(OptionType.INTEGER, "id", "ID игрока", true),
+                new OptionData(OptionType.BOOLEAN, "inactive", "Включая неактивные", false));
 
         commandListener.update();
         // endregion

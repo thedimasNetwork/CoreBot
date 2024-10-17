@@ -533,10 +533,12 @@ public class CoreBot {
                     return hook.sendMessageEmbeds(Util.embedBuilder("Игрок не забанен", Colors.yellow)).submit();
                 }
 
-                Set<String> uuids = Set.of(Arrays.stream(bans).map(BansRecord::getTarget).toArray(String[]::new));
+                Set<String> uuids = Arrays.stream(bans).map(BansRecord::getTarget).collect(Collectors.toSet());
+                Set<String> adminUuids = Arrays.stream(bans).map(BansRecord::getAdmin).filter(Util::isBase64).collect(Collectors.toSet());
                 Map<String, UsersRecord> users = Database.getContext()
                         .selectFrom(Tables.users)
                         .where(Tables.users.uuid.in(uuids))
+                        .or(Tables.users.uuid.in(adminUuids))
                         .fetch()
                         .intoMap(Tables.users.uuid);
 
@@ -562,7 +564,9 @@ public class CoreBot {
                                     **Срок**: %s
                                     **Активен**: %s
                                     """,
-                            ban.getAdmin(),
+                            adminUuids.contains(ban.getAdmin()) ?
+                                    String.format("%s (%d)", Strings.stripColors(users.get(ban.getAdmin()).getName()), users.get(ban.getAdmin()).getId()) :
+                                    ban.getAdmin(),
                             String.format("%s (%d)", Strings.stripColors(target.getName()), target.getId()),
                             ban.getReason(),
                             String.format("<t:%d:f>", ban.getCreated().toEpochSecond()),

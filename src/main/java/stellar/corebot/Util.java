@@ -76,4 +76,8 @@ public class Util {
                 .fetchOne()
                 .value1();
     }
+
+    public static boolean isBase64(String string) {
+        return string.matches("^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$") && string.length() % 4 == 0;
+    }
 }

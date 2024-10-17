@@ -504,72 +504,83 @@ public class CoreBot {
 
         commandListener.register("ban-trace", "Трассировака бана/-ов для указанного пользователя", interaction -> {
             return interaction.deferReply(true).submit().thenComposeAsync(hook -> {
-                        UsersRecord record = Database.getPlayer(interaction.getOption("id").getAsInt());
-                        var userIpsQuery = DSL.selectDistinct(Tables.logins.ip)
-                                .from(Tables.logins)
-                                .where(Tables.logins.uuid.eq(record.getUuid()));
+                UsersRecord record = Database.getPlayer(interaction.getOption("id").getAsInt());
+                var userIpsQuery = DSL.selectDistinct(Tables.logins.ip)
+                        .from(Tables.logins)
+                        .where(Tables.logins.uuid.eq(record.getUuid()));
 
-                        var bannedIpsQuery = DSL.selectDistinct(Tables.logins.ip, Tables.bans.asterisk())
-                                .from(Tables.logins)
-                                .join(Tables.users).on(Tables.logins.uuid.eq(Tables.users.uuid))
-                                .join(Tables.bans).on(Tables.bans.target.eq(Tables.users.uuid));
+                var bannedIpsQuery = DSL.selectDistinct(Tables.logins.ip, Tables.bans.asterisk())
+                        .from(Tables.logins)
+                        .join(Tables.users).on(Tables.logins.uuid.eq(Tables.users.uuid))
+                        .join(Tables.bans).on(Tables.bans.target.eq(Tables.users.uuid));
 
-                        Integer[] banIds = Database.getContext()
-                                .select(bannedIpsQuery.field("id"))
-                                .from(Tables.users)
-                                .join(userIpsQuery).on(Tables.users.uuid.eq(record.getUuid()))
-                                .leftJoin(bannedIpsQuery).on(userIpsQuery.field("ip", String.class).eq(bannedIpsQuery.field("ip", String.class)))
-                                .where(bannedIpsQuery.field("ip").isNotNull())
-                                .orderBy(bannedIpsQuery.field("id").desc())
-                                .fetchArray(0, Integer.class);
+                Integer[] banIds = Database.getContext()
+                        .select(bannedIpsQuery.field("id"))
+                        .from(Tables.users)
+                        .join(userIpsQuery).on(Tables.users.uuid.eq(record.getUuid()))
+                        .leftJoin(bannedIpsQuery).on(userIpsQuery.field("ip", String.class).eq(bannedIpsQuery.field("ip", String.class)))
+                        .where(bannedIpsQuery.field("ip").isNotNull())
+                        .orderBy(bannedIpsQuery.field("id").desc())
+                        .fetchArray(0, Integer.class);
 
-                        BansRecord[] bans = Database.getContext()
-                                .selectFrom(Tables.bans)
-                                .where(Tables.bans.id.in(banIds))
-                                .orderBy(Tables.bans.id.desc())
-                                .fetchArray(); // I know that I could've used Database.getBans, but it returns only active bans
+                BansRecord[] bans = Database.getContext()
+                        .selectFrom(Tables.bans)
+                        .where(Tables.bans.id.in(banIds))
+                        .orderBy(Tables.bans.id.desc())
+                        .fetchArray(); // I know that I could've used Database.getBans, but it returns only active bans
 
-                        MessageCreateBuilder messageBuilder = new MessageCreateBuilder()
-                                .setContent("Трассировка банов для **" + Strings.stripColors(record.getName()) + "** / `" + record.getId() + "`:");
-                        for (int i = 0; i < Math.min(bans.length, 10); i++) {
-                            BansRecord ban = bans[i];
+                if (bans.length == 0) {
+                    return hook.sendMessageEmbeds(Util.embedBuilder("Игрок не забанен", Colors.yellow)).submit();
+                }
 
-                            List<String> userIps = null, bannedIps = null, commonIps = new ArrayList<>();
-                            if (!ban.getTarget().equals(record.getUuid())) {
-                                userIps = new ArrayList<>(List.of(Database.getIps(record.getUuid())));
-                                bannedIps = List.of(Database.getIps(ban.getTarget()));
-                                commonIps = userIps;
-                                commonIps.retainAll(bannedIps);
-                            }
+                Set<String> uuids = Set.of(Arrays.stream(bans).map(BansRecord::getTarget).toArray(String[]::new));
+                Map<String, UsersRecord> users = Database.getContext()
+                        .selectFrom(Tables.users)
+                        .where(Tables.users.uuid.in(uuids))
+                        .fetch()
+                        .intoMap(Tables.users.uuid);
 
-                            String title = (ban.getTarget().equals(record.getUuid()) ? "Оригинальный бан" : "Рекурсивный бан") + " #" + ban.getId();
-                            StringBuilder content = new StringBuilder(String.format("""
-                                            **Админ**: %s
-                                            **Нарушитель**: %s
-                                            **Причина**: %s
-                                            **Дата**: %s
-                                            **Срок**: %s
-                                            **Активен**: %s
-                                            """,
-                                    ban.getAdmin(),
-                                    ban.getTarget(),
-                                    ban.getReason(),
-                                    String.format("<t:%d:f>", ban.getCreated().toEpochSecond()),
-                                    ban.getUntil() != null ? String.format("<t:%d:f>", ban.getUntil().toEpochSecond()) : "Перманентный",
-                                    Util.fancyBool(ban.isActive())));
+                MessageCreateBuilder messageBuilder = new MessageCreateBuilder()
+                        .setContent("Трассировка банов для **" + Strings.stripColors(record.getName()) + "** / `" + record.getId() + "`:");
+                for (int i = 0; i < Math.min(bans.length, 10); i++) {
+                    BansRecord ban = bans[i];
+                    UsersRecord target = users.get(ban.getTarget());
+                    List<String> userIps, bannedIps, commonIps = new ArrayList<>();
+                    if (!ban.getTarget().equals(record.getUuid())) {
+                        userIps = new ArrayList<>(List.of(Database.getIps(record.getUuid())));
+                        bannedIps = List.of(Database.getIps(ban.getTarget()));
+                        commonIps = userIps;
+                        commonIps.retainAll(bannedIps);
+                    }
 
-                            if (!commonIps.isEmpty()) content.append("\n").append("**Совпадения IP**:");
-                            for (String ip : commonIps) {
-                                content.append("\n").append(String.format("* **%s**: B-%d/T-%d", ip, Util.ipUsed(ban.getTarget(), ip), Util.ipUsed(record.getUuid(), ip)));
-                            }
+                    String title = (ban.getTarget().equals(record.getUuid()) ? "Оригинальный бан" : "Рекурсивный бан") + " #" + ban.getId();
+                    StringBuilder content = new StringBuilder(String.format("""
+                                    **Админ**: %s
+                                    **Нарушитель**: %s
+                                    **Причина**: %s
+                                    **Дата**: %s
+                                    **Срок**: %s
+                                    **Активен**: %s
+                                    """,
+                            ban.getAdmin(),
+                            String.format("%s (%d)", Strings.stripColors(target.getName()), target.getId()),
+                            ban.getReason(),
+                            String.format("<t:%d:f>", ban.getCreated().toEpochSecond()),
+                            ban.getUntil() != null ? String.format("<t:%d:f>", ban.getUntil().toEpochSecond()) : "Перманентный",
+                            Util.fancyBool(ban.isActive())));
 
-                            messageBuilder.addEmbeds(Util.embedBuilder(title, content.toString().strip(), ban.getTarget().equals(record.getUuid()) ? Colors.red : Colors.blue));
-                        }
-                        return hook.sendMessage(messageBuilder.build()).submit();
-                    }).exceptionally(e -> {
-                        Log.err(e);
-                        return null;
-                    });
+                    if (!commonIps.isEmpty()) content.append("\n").append("**Совпадения IP**:");
+                    for (String ip : commonIps) {
+                        content.append("\n").append(String.format("* **%s**: B-%d/T-%d", ip, Util.ipUsed(ban.getTarget(), ip), Util.ipUsed(record.getUuid(), ip)));
+                    }
+
+                    messageBuilder.addEmbeds(Util.embedBuilder(title, content.toString().strip(), ban.getTarget().equals(record.getUuid()) ? Colors.red : Colors.blue));
+                }
+                return hook.sendMessage(messageBuilder.build()).submit();
+            }).exceptionally(e -> {
+                Log.err(e);
+                return null;
+            });
         }, new OptionData(OptionType.INTEGER, "id", "ID игрока", true));
 
         commandListener.update();

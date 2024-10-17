@@ -535,6 +535,7 @@ public class CoreBot {
                     return hook.sendMessageEmbeds(Util.embedBuilder("Ничего не найдено", Colors.yellow)).submit();
                 }
 
+                boolean allBans = interaction.getOption("inactive", false, OptionMapping::getAsBoolean);
                 Set<String> uuids = Arrays.stream(bans).map(BansRecord::getTarget).collect(Collectors.toSet());
                 Set<String> adminUuids = Arrays.stream(bans).map(BansRecord::getAdmin).filter(Util::isBase64).collect(Collectors.toSet());
                 Map<String, UsersRecord> users = Database.getContext()
@@ -548,6 +549,12 @@ public class CoreBot {
                         .setContent("Трассировка банов для **" + Strings.stripColors(record.getName()) + "** / `" + record.getId() + "`:");
                 for (int i = 0; i < Math.min(bans.length, 10); i++) {
                     BansRecord ban = bans[i];
+                    boolean active = ban.isActive() && (ban.getUntil() == null || ban.getUntil().isBefore(OffsetDateTime.now()));
+
+                    if (!active && !allBans) {
+                        continue;
+                    }
+
                     UsersRecord target = users.get(ban.getTarget());
                     List<String> userIps, bannedIps, commonIps = new ArrayList<>();
                     if (!ban.getTarget().equals(record.getUuid())) {
@@ -557,7 +564,6 @@ public class CoreBot {
                         commonIps.retainAll(bannedIps);
                     }
 
-                    boolean active = ban.isActive() && (ban.getUntil() == null || ban.getUntil().isBefore(OffsetDateTime.now()));
                     String title = (ban.getTarget().equals(record.getUuid()) ? "Оригинальный бан" : "Рекурсивный бан") + " #" + ban.getId();
                     StringBuilder content = new StringBuilder(String.format("""
                                     **Админ**: %s
